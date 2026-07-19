@@ -1,4 +1,4 @@
-import type { ApiErrorBody, MetadataResponse, RecommendationRequest, RecommendationResponse } from '../types/api'
+import type { AgentTurnRequest, AgentTurnResponse, ApiErrorBody, MetadataResponse, RecommendationRequest, RecommendationResponse } from '../types/api'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '')
 
@@ -29,6 +29,11 @@ export const api = {
   metadata: () => request<MetadataResponse>('/metadata'),
   recommend: (payload: RecommendationRequest) =>
     request<RecommendationResponse>('/recommendations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  agentTurn: (payload: AgentTurnRequest) =>
+    request<AgentTurnResponse>('/agent/turns', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

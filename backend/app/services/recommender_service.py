@@ -115,3 +115,67 @@ class RecommenderService:
                 "warnings": json.loads(row["warning_messages"]),
             })
         return items, _json_safe(result.diagnostics)
+
+    def compare(
+        self,
+        area_codes: list[str],
+        industry_code: str,
+        *,
+        allowed_area_codes: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return observed comparison metrics for up to five eligible result areas."""
+        requested = list(dict.fromkeys(str(code) for code in area_codes))
+        if not requested or len(requested) > 5:
+            raise ValueError("비교할 추천 상권을 1~5개 선택해주세요.")
+        if allowed_area_codes is not None and not set(requested).issubset(allowed_area_codes):
+            raise ValueError("현재 추천 결과에 포함된 상권만 비교할 수 있습니다.")
+
+        profile_columns = [
+            "area_code", "area_name", "district_name", "area_type_name",
+            "floating_population", "resident_population", "worker_population",
+            "transport_facility_count", "education_facility_count",
+            "medical_facility_count", "shopping_facility_count", "culture_facility_count",
+            "apartment_average_market_price", "data_reliability",
+        ]
+        evidence_columns = [
+            "area_code", "competition_intensity", "recent_4q_average_sales",
+            "recent_4q_growth_rate", "closing_rate", "data_reliability", "reliability_grade",
+        ]
+        profile = self.index.loc[self.index["area_code"].astype(str).isin(requested), profile_columns].copy()
+        evidence = self.evidence.loc[
+            self.evidence["area_code"].astype(str).isin(requested)
+            & self.evidence["industry_code"].astype(str).eq(industry_code),
+            evidence_columns,
+        ].copy()
+        evidence = evidence.rename(columns={"data_reliability": "evidence_data_reliability"})
+        compared = profile.merge(evidence, on="area_code", how="left", validate="one_to_one")
+        if set(compared["area_code"].astype(str)) != set(requested):
+            raise ValueError("비교할 상권 데이터를 찾을 수 없습니다.")
+        order = {code: index for index, code in enumerate(requested)}
+        compared["_order"] = compared["area_code"].astype(str).map(order)
+        compared = compared.sort_values("_order")
+
+        rows: list[dict[str, Any]] = []
+        for row in compared.to_dict(orient="records"):
+            rows.append(_json_safe({
+                "area_code": str(row["area_code"]),
+                "area_name": str(row["area_name"]),
+                "district_name": str(row["district_name"]),
+                "area_type": str(row["area_type_name"]),
+                "floating_population": row.get("floating_population"),
+                "resident_population": row.get("resident_population"),
+                "worker_population": row.get("worker_population"),
+                "transport_facility_count": row.get("transport_facility_count"),
+                "education_facility_count": row.get("education_facility_count"),
+                "medical_facility_count": row.get("medical_facility_count"),
+                "shopping_facility_count": row.get("shopping_facility_count"),
+                "culture_facility_count": row.get("culture_facility_count"),
+                "apartment_average_market_price": row.get("apartment_average_market_price"),
+                "competition_intensity": row.get("competition_intensity"),
+                "recent_4q_average_sales": row.get("recent_4q_average_sales"),
+                "recent_4q_growth_rate": row.get("recent_4q_growth_rate"),
+                "closing_rate": row.get("closing_rate"),
+                "data_reliability": row.get("evidence_data_reliability", row.get("data_reliability")),
+                "reliability_grade": row.get("reliability_grade"),
+            }))
+        return rows

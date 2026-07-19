@@ -82,3 +82,57 @@ export interface ApiErrorBody {
   }
   detail?: Array<{ msg: string }>
 }
+
+export type AgentPhase = 'gathering' | 'ready_for_confirmation' | 'results'
+
+export interface AgentMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface RecommendationDraft extends Omit<RecommendationRequest, 'industry_code'> {
+  industry_code: string | null
+}
+
+export interface AreaComparison {
+  area_code: string
+  area_name: string
+  district_name: string
+  area_type: string
+  floating_population: number | null
+  resident_population: number | null
+  worker_population: number | null
+  transport_facility_count: number | null
+  education_facility_count: number | null
+  medical_facility_count: number | null
+  shopping_facility_count: number | null
+  culture_facility_count: number | null
+  apartment_average_market_price: number | null
+  competition_intensity: number | null
+  recent_4q_average_sales: number | null
+  recent_4q_growth_rate: number | null
+  closing_rate: number | null
+  data_reliability: number | null
+  reliability_grade: string | null
+}
+
+export interface AgentTurnRequest {
+  action: 'message' | 'confirm_recommendation'
+  message: string
+  history: AgentMessage[]
+  draft: RecommendationDraft
+  active_recommendation_request: RecommendationRequest | null
+}
+
+export interface AgentTurnResponse {
+  request_id: string
+  artifact_version: string
+  assistant_message: string
+  phase: AgentPhase
+  draft: RecommendationDraft
+  missing_fields: string[]
+  confirmation_summary: string | null
+  recommendations: RecommendationItem[]
+  diagnostics: Record<string, unknown>
+  comparison: AreaComparison[]
+}

@@ -1,37 +1,100 @@
 import { useEffect, useState } from 'react'
 import { api } from './api/client'
 import { RecommendationMap } from './components/map/RecommendationMap'
-import { RecommendationForm } from './features/recommendation/RecommendationForm'
-import { emptyRecommendationRequest, hasPreference } from './features/recommendation/model'
+import { AgentPanel } from './features/agent/AgentPanel'
+import {
+  AGENT_SESSION_KEY,
+  draftToRequest,
+  isDraftReady,
+  restoreSession,
+  type AgentSession,
+} from './features/agent/model'
 import { RecommendationResults } from './features/recommendation/RecommendationResults'
-import type { MetadataResponse, RecommendationItem, RecommendationRequest } from './types/api'
+import type { AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem } from './types/api'
 
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
-  const [form, setForm] = useState<RecommendationRequest>(emptyRecommendationRequest)
-  const [items, setItems] = useState<RecommendationItem[]>([])
-  const [selected, setSelected] = useState<RecommendationItem | null>(null)
+  const [session, setSession] = useState<AgentSession>(() => restoreSession(sessionStorage.getItem(AGENT_SESSION_KEY)))
+  const [selected, setSelected] = useState<RecommendationItem | null>(() => session.items[0] || null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [lastTurn, setLastTurn] = useState<AgentTurnRequest | null>(null)
 
   useEffect(() => {
     api.metadata().then(setMetadata).catch((reason: Error) => setError(reason.message))
   }, [])
 
-  const submit = async () => {
-    if (!form.industry_code) return setError('업종을 선택해주세요.')
-    if (!hasPreference(form)) return setError('업종 외에 원하는 조건을 하나 이상 선택해주세요.')
+  useEffect(() => {
+    sessionStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(session))
+  }, [session])
+
+  const executeTurn = async (payload: AgentTurnRequest, showUserMessage: boolean) => {
+    const visibleHistory = showUserMessage
+      ? [...session.history, { role: 'user' as const, content: payload.message }].slice(-20)
+      : session.history
+    if (showUserMessage) setSession((current) => ({ ...current, history: visibleHistory }))
     setLoading(true)
     setError(null)
+    setLastTurn(payload)
     try {
-      const response = await api.recommend(form)
-      setItems(response.recommendations)
-      setSelected(response.recommendations[0] || null)
+      const response = await api.agentTurn(payload)
+      const keepActiveResults = response.phase === 'results'
+      const items = response.recommendations.length
+        ? response.recommendations
+        : keepActiveResults ? session.items : []
+      const activeRequest = response.recommendations.length
+        ? draftToRequest(response.draft)
+        : keepActiveResults ? session.activeRequest : null
+      const nextSession: AgentSession = {
+        history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
+        draft: response.draft,
+        phase: response.phase,
+        items,
+        comparison: response.comparison.length
+          ? response.comparison
+          : keepActiveResults ? session.comparison : [],
+        activeRequest,
+      }
+      setSession(nextSession)
+      if (response.recommendations.length) setSelected(response.recommendations[0] || null)
+      else if (!keepActiveResults) setSelected(null)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '추천 요청에 실패했습니다.')
+      setError(reason instanceof Error ? reason.message : 'AI 상담 요청에 실패했습니다.')
     } finally {
       setLoading(false)
     }
+  }
+
+  const sendMessage = (message: string) => executeTurn({
+    action: 'message',
+    message,
+    history: session.history.slice(-20),
+    draft: session.draft,
+    active_recommendation_request: session.activeRequest,
+  }, true)
+
+  const confirm = () => {
+    if (!isDraftReady(session.draft)) return setError('업종과 희망 조건을 먼저 알려주세요.')
+    return executeTurn({
+      action: 'confirm_recommendation',
+      message: '조건 카드를 확인했습니다. 이 조건으로 추천을 실행해주세요.',
+      history: session.history.slice(-20),
+      draft: session.draft,
+      active_recommendation_request: null,
+    }, false)
+  }
+
+  const editDraft = (draft: RecommendationDraft) => {
+    setError(null)
+    setSelected(null)
+    setSession((current) => ({
+      ...current,
+      draft,
+      phase: isDraftReady(draft) ? 'ready_for_confirmation' : 'gathering',
+      items: [],
+      comparison: [],
+      activeRequest: null,
+    }))
   }
 
   if (!metadata) {
@@ -55,19 +118,29 @@ export default function App() {
         </section>
 
         <section className="workspace">
-          <RecommendationForm metadata={metadata} value={form} loading={loading} onChange={setForm} onSubmit={submit} />
+          <AgentPanel
+            metadata={metadata}
+            history={session.history}
+            draft={session.draft}
+            phase={session.phase}
+            comparison={session.comparison}
+            loading={loading}
+            onSend={sendMessage}
+            onConfirm={confirm}
+            onDraftChange={editDraft}
+          />
           <div className="output-area">
-            {error && <div className="error-banner" role="alert">{error}</div>}
-            {items.length ? (
+            {error && <div className="error-banner" role="alert">{error} {lastTurn && <button type="button" onClick={() => executeTurn(lastTurn, false)}>다시 시도</button>}</div>}
+            {session.items.length ? (
               <>
-                <RecommendationMap items={items} selected={selected} onSelect={setSelected} />
-                <RecommendationResults items={items} selectedCode={selected?.area_code || null} onSelect={setSelected} />
+                <RecommendationMap items={session.items} selected={selected} onSelect={setSelected} />
+                <RecommendationResults items={session.items} selectedCode={selected?.area_code || null} onSelect={setSelected} />
               </>
             ) : (
               <div className="empty-state">
                 <div className="compass">⌖</div>
-                <h2>조건을 선택하면 추천 지도가 열립니다</h2>
-                <p>왼쪽에서 업종과 고객 특성을 설정해보세요.</p>
+                <h2>AI와 조건을 정리하면 추천 지도가 열립니다</h2>
+                <p>왼쪽 대화창에 업종과 원하는 입지를 편하게 설명해보세요.</p>
               </div>
             )}
           </div>

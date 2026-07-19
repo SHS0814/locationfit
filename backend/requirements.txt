@@ -7,3 +7,4 @@ scipy>=1.14,<2
 scikit-learn>=1.6,<2
 pyarrow>=18,<23
 pyproj>=3.7,<4
+openai-agents>=0.8,<1

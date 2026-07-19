@@ -46,25 +46,32 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 
 class RecommendationRateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, *, limit: int, window_seconds: int = 60) -> None:
+    def __init__(self, app, *, limit: int, agent_limit: int, window_seconds: int = 60) -> None:
         super().__init__(app)
         self.limit = limit
+        self.agent_limit = agent_limit
         self.window_seconds = window_seconds
-        self.requests: dict[str, deque[float]] = defaultdict(deque)
+        self.requests: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 
     async def dispatch(self, request: Request, call_next):
-        if request.method != "POST" or not request.url.path.endswith("/recommendations"):
+        if request.method != "POST":
+            return await call_next(request)
+        if request.url.path.endswith("/recommendations"):
+            bucket, limit, code = "recommendations", self.limit, "RATE_LIMIT_EXCEEDED"
+        elif request.url.path.endswith("/agent/turns"):
+            bucket, limit, code = "agent", self.agent_limit, "AGENT_RATE_LIMIT_EXCEEDED"
+        else:
             return await call_next(request)
         client = request.client.host if request.client else "unknown"
         now = monotonic()
-        history = self.requests[client]
+        history = self.requests[(client, bucket)]
         while history and history[0] <= now - self.window_seconds:
             history.popleft()
-        if len(history) >= self.limit:
+        if len(history) >= limit:
             return error_response(
                 429,
-                "RATE_LIMIT_EXCEEDED",
-                "추천 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
+                code,
+                "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
                 getattr(request.state, "request_id", None),
             )
         history.append(now)

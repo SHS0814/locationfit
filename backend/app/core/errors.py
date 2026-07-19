@@ -4,6 +4,12 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from backend.app.services.agent_service import (
+    AgentStateError,
+    AgentTimeoutError,
+    AgentUnavailableError,
+)
+
 
 def error_response(status_code: int, code: str, message: str, request_id: str | None) -> JSONResponse:
     return JSONResponse(
@@ -22,6 +28,33 @@ async def runtime_error_handler(request: Request, exc: RuntimeError) -> JSONResp
     return error_response(
         503,
         "RECOMMENDER_UNAVAILABLE",
+        str(exc),
+        getattr(request.state, "request_id", None),
+    )
+
+
+async def agent_unavailable_error_handler(request: Request, exc: AgentUnavailableError) -> JSONResponse:
+    return error_response(
+        503,
+        "AGENT_UNAVAILABLE",
+        str(exc),
+        getattr(request.state, "request_id", None),
+    )
+
+
+async def agent_timeout_error_handler(request: Request, exc: AgentTimeoutError) -> JSONResponse:
+    return error_response(
+        504,
+        "AGENT_TIMEOUT",
+        str(exc),
+        getattr(request.state, "request_id", None),
+    )
+
+
+async def agent_state_error_handler(request: Request, exc: AgentStateError) -> JSONResponse:
+    return error_response(
+        422,
+        "INVALID_AGENT_STATE",
         str(exc),
         getattr(request.state, "request_id", None),
     )
