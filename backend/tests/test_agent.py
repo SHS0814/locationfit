@@ -8,6 +8,7 @@ from backend.app.main import app
 from backend.app.schemas.agent import (
     AgentDecision,
     AgentTurnRequest,
+    FounderContext,
     RecommendationDraft,
 )
 from backend.app.services.agent_service import AgentExecution, LocationAgentService
@@ -40,8 +41,12 @@ class ReadyRunner:
             )
         return AgentExecution(
             AgentDecision(
-                assistant_message="해석한 조건이 맞는지 확인해주세요.",
+                assistant_message="데이터를 탐색하겠습니다.",
                 draft=draft,
+                context=FounderContext(
+                    target_customer="직장인 점심 고객",
+                    location_flexibility="fixed",
+                ),
             )
         )
 
@@ -62,17 +67,52 @@ class ComparisonRunner:
         )
 
 
-def test_agent_moves_to_confirmation_without_running_recommendation() -> None:
+class IncompleteRunner:
+    async def run(self, payload, recommender, metadata) -> AgentExecution:
+        return AgentExecution(AgentDecision(
+            assistant_message="고객과 시간과 지역을 모두 알려주세요? 두 번째 질문도요?",
+            draft=RecommendationDraft(industry_code="CS100001"),
+        ))
+
+
+def test_agent_explores_three_scenarios_without_final_recommendation() -> None:
     runner = ReadyRunner()
     service = LocationAgentService(
         RecommenderService(ARTIFACT_DIR), runner, timeout_seconds=1,
     )
     result = asyncio.run(service.turn(AgentTurnRequest(message="강남에서 한식집을 열고 싶어요")))
 
-    assert result["phase"] == "ready_for_confirmation"
+    assert result["phase"] == "scenarios_ready"
     assert result["recommendations"] == []
     assert runner.actions == ["message"]
-    assert "강남구" in result["confirmation_summary"]
+    assert [item["id"] for item in result["scenarios"]] == [
+        "condition_fit", "growth", "stability",
+    ]
+    assert result["analysis_revision"] == 1
+
+
+def test_discovery_asks_one_question_and_applies_defaults_after_four_turns() -> None:
+    service = LocationAgentService(
+        RecommenderService(ARTIFACT_DIR), IncompleteRunner(), timeout_seconds=1,
+    )
+    payload = AgentTurnRequest(message="한식집을 열고 싶어요")
+    for turn in range(4):
+        result = asyncio.run(service.turn(payload))
+        if turn < 3:
+            assert result["phase"] == "discovering"
+            assert result["assistant_message"].count("?") <= 1
+        payload = AgentTurnRequest(
+            message="아직 잘 모르겠어요",
+            draft=result["draft"],
+            context=result["context"],
+            assumptions=result["assumptions"],
+            analysis_revision=result["analysis_revision"],
+        )
+
+    assert result["phase"] == "scenarios_ready"
+    assert result["context"].location_flexibility == "open"
+    assert result["context"].risk_tolerance == "medium"
+    assert result["draft"].min_data_reliability == 0.5
 
 
 def test_confirm_action_returns_deterministic_recommendations() -> None:
@@ -107,9 +147,32 @@ def test_agent_api_contract_with_injected_runner() -> None:
 
         assert response.status_code == 200
         body = response.json()
-        assert body["phase"] == "ready_for_confirmation"
+        assert body["phase"] == "scenarios_ready"
         assert body["draft"]["industry_code"] == "CS100001"
+        assert len(body["scenarios"]) == 3
         assert body["request_id"] == response.headers["x-request-id"]
+
+
+def test_select_scenario_requires_confirmation_before_final_result() -> None:
+    service = LocationAgentService(
+        RecommenderService(ARTIFACT_DIR), ReadyRunner(), timeout_seconds=1,
+    )
+    draft = RecommendationDraft(
+        industry_code="CS100001", preferred_districts=["강남구"], top_n=3,
+    )
+    result = asyncio.run(service.turn(AgentTurnRequest(
+        action="select_scenario",
+        message="안정성 우선형을 선택합니다.",
+        draft=draft,
+        scenario_id="stability",
+        selected_scenario_id="stability",
+        analysis_revision=1,
+    )))
+
+    assert result["phase"] == "ready_for_confirmation"
+    assert result["draft"].strategy == "stability"
+    assert result["recommendations"] == []
+    assert "안정성 우선형" in result["confirmation_summary"]
 
 
 def test_confirmation_requires_ready_draft() -> None:

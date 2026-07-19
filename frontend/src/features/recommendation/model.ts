@@ -22,6 +22,7 @@ export const emptyRecommendationRequest: RecommendationRequest = {
   excluded_districts: [],
   min_data_reliability: 0,
   top_n: 10,
+  strategy: 'balanced',
 }
 
 const preferenceKeys: Array<keyof RecommendationRequest> = [

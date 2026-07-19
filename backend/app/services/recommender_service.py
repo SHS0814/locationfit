@@ -116,6 +116,181 @@ class RecommenderService:
             })
         return items, _json_safe(result.diagnostics)
 
+    def inspect_market_landscape(self, payload: RecommendationRequestSchema) -> dict[str, Any]:
+        """Return bounded aggregate facts for agent exploration without exposing raw tables."""
+        evidence = self.evidence.loc[
+            self.evidence["industry_code"].astype(str).eq(payload.industry_code)
+            & self.evidence["reliability_grade"].ne("D")
+            & self.evidence["stale_observation_flag"].eq(0)
+            & self.evidence["data_reliability"].ge(payload.min_data_reliability)
+        ].copy()
+        profile = self.index.copy()
+        if payload.preferred_districts:
+            profile = profile.loc[profile["district_name"].isin(payload.preferred_districts)]
+        if payload.excluded_districts:
+            profile = profile.loc[~profile["district_name"].isin(payload.excluded_districts)]
+        if payload.preferred_area_types:
+            values = set(payload.preferred_area_types)
+            profile = profile.loc[
+                profile["area_type_code"].isin(values) | profile["area_type_name"].isin(values)
+            ]
+        eligible = profile[["area_code", "district_name", "area_type_name"]].merge(
+            evidence,
+            on="area_code",
+            how="inner",
+            suffixes=("_profile", "_evidence"),
+            validate="one_to_one",
+        )
+
+        def distribution(column: str) -> dict[str, float | None]:
+            source = eligible[column] if column in eligible else pd.Series(dtype="float64")
+            values = pd.to_numeric(source, errors="coerce").dropna()
+            if values.empty:
+                return {"p25": None, "median": None, "p75": None}
+            return {
+                "p25": float(values.quantile(0.25)),
+                "median": float(values.median()),
+                "p75": float(values.quantile(0.75)),
+            }
+
+        district_counts = eligible["district_name"].value_counts().head(5)
+        type_counts = eligible["area_type_name"].value_counts().head(5)
+        return _json_safe({
+            "industry_code": payload.industry_code,
+            "eligible_area_count": len(eligible),
+            "top_districts_by_coverage": [
+                {"district_name": str(name), "area_count": int(count)}
+                for name, count in district_counts.items()
+            ],
+            "area_type_coverage": [
+                {"area_type": str(name), "area_count": int(count)}
+                for name, count in type_counts.items()
+            ],
+            "metric_distribution": {
+                "recent_4q_average_sales": distribution("recent_4q_average_sales"),
+                "recent_4q_growth_rate": distribution("recent_4q_growth_rate"),
+                "competition_intensity": distribution("competition_intensity"),
+                "closing_rate": distribution("closing_rate"),
+                "data_reliability": distribution("data_reliability"),
+            },
+            "data_period": self.manifest.get("data_period", {}),
+        })
+
+    def analyze_strategy_scenarios(
+        self,
+        payload: RecommendationRequestSchema,
+        *,
+        preview_count: int = 3,
+    ) -> list[dict[str, Any]]:
+        """Run the three versioned strategies against the same confirmed constraints."""
+        labels = {
+            "condition_fit": ("조건 충실형", "말씀하신 고객·시간·입지 조건과 가까운 후보를 우선합니다."),
+            "growth": ("성장 기회형", "최근 성장과 장기 추세가 강한 후보에 더 무게를 둡니다."),
+            "stability": ("안정성 우선형", "매출 변동과 하락·폐업 위험이 낮은 후보를 우선합니다."),
+        }
+        scenarios: list[dict[str, Any]] = []
+        requested_count = min(5, max(preview_count, payload.top_n))
+        for strategy, (title, description) in labels.items():
+            selected_request = payload.model_copy(update={"strategy": strategy})
+            analysis_request = selected_request.model_copy(update={"top_n": requested_count})
+            try:
+                recommendations, diagnostics = self.recommend(analysis_request)
+            except ValueError as exc:
+                recommendations = []
+                diagnostics = {
+                    "strategy": strategy,
+                    "policy_version": "strategy-v1",
+                    "eligible_candidates_before_k": 0,
+                    "returned": 0,
+                    "warning": str(exc),
+                }
+            scenarios.append({
+                "id": strategy,
+                "strategy": strategy,
+                "title": title,
+                "description": description,
+                "request": selected_request.model_dump(),
+                "candidate_count": int(diagnostics["eligible_candidates_before_k"]),
+                "recommendations": recommendations[:preview_count],
+                "diagnostics": diagnostics,
+                "relaxed_fields": [],
+            })
+        return scenarios
+
+    def diagnose_constraint_conflicts(
+        self,
+        payload: RecommendationRequestSchema,
+        scenarios: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Describe measurable conflicts and safe hard-filter relaxation options."""
+        tradeoffs: list[dict[str, Any]] = []
+        base_count = min((scenario["candidate_count"] for scenario in scenarios), default=0)
+        if base_count < payload.top_n:
+            tradeoffs.append({
+                "kind": "candidate_scarcity",
+                "message": f"현재 조건을 모두 만족하는 후보가 {base_count}곳으로 요청한 {payload.top_n}곳보다 적습니다.",
+                "severity": "warning",
+            })
+
+        low_factors: dict[str, float] = {}
+        for scenario in scenarios:
+            if not scenario["recommendations"]:
+                continue
+            for reason in scenario["recommendations"][0].get("negative_reasons", []):
+                score = float(reason.get("fit_score", 100))
+                if score < 40:
+                    factor = str(reason.get("factor", reason.get("feature", "선호 조건")))
+                    low_factors[factor] = min(low_factors.get(factor, 100), score)
+        for factor, score in sorted(low_factors.items(), key=lambda item: item[1])[:2]:
+            tradeoffs.append({
+                "kind": "preference_conflict",
+                "message": f"상위 후보도 ‘{factor}’ 적합도가 {score:.1f}점으로 낮아 다른 조건과 상충합니다.",
+                "severity": "info",
+            })
+
+        for left_index, left in enumerate(scenarios):
+            left_codes = {item["area_code"] for item in left["recommendations"][:5]}
+            for right in scenarios[left_index + 1:]:
+                right_codes = {item["area_code"] for item in right["recommendations"][:5]}
+                denominator = min(len(left_codes), len(right_codes))
+                overlap = len(left_codes & right_codes) / denominator if denominator else 1.0
+                if overlap < 0.4:
+                    tradeoffs.append({
+                        "kind": "strategy_disagreement",
+                        "message": f"{left['title']}과 {right['title']}의 상위 후보가 크게 달라 우선순위 선택이 중요합니다.",
+                        "severity": "info",
+                    })
+
+        relaxations: list[dict[str, Any]] = []
+        variants: list[tuple[str, dict[str, Any], str]] = []
+        if payload.preferred_districts:
+            variants.append(("preferred_districts", {"preferred_districts": []}, "선호 지역을 서울 전체로 확대"))
+        if payload.preferred_area_types:
+            variants.append(("preferred_area_types", {"preferred_area_types": []}, "상권 유형 제한을 해제"))
+        if payload.preferred_districts and payload.preferred_area_types:
+            variants.append((
+                "preferred_districts,preferred_area_types",
+                {"preferred_districts": [], "preferred_area_types": []},
+                "선호 지역과 상권 유형을 모두 확대",
+            ))
+        for field, changes, label in variants:
+            relaxed = payload.model_copy(update={**changes, "strategy": "condition_fit"})
+            try:
+                _, diagnostics = self.recommend(relaxed)
+            except ValueError:
+                continue
+            count = int(diagnostics["eligible_candidates_before_k"])
+            if count > base_count:
+                relaxations.append({
+                    "id": field,
+                    "label": label,
+                    "relaxed_fields": field.split(","),
+                    "candidate_count_before": base_count,
+                    "candidate_count_after": count,
+                    "request": relaxed.model_dump(),
+                })
+        return tradeoffs, relaxations
+
     def compare(
         self,
         area_codes: list[str],

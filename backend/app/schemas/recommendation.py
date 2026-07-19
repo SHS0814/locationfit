@@ -29,6 +29,7 @@ class RecommendationRequestSchema(BaseModel):
     excluded_districts: list[str] = Field(default_factory=list)
     min_data_reliability: float = Field(0, ge=0, le=1)
     top_n: int = Field(10, ge=1, le=50)
+    strategy: Literal["balanced", "condition_fit", "growth", "stability"] = "balanced"
 
 
 class FitReason(BaseModel):

@@ -2,9 +2,15 @@ import { useState, type FormEvent } from 'react'
 import type {
   AgentMessage,
   AgentPhase,
+  AgentAssumption,
   AreaComparison,
+  DataGap,
+  FounderContext,
   MetadataResponse,
   RecommendationDraft,
+  RelaxationOption,
+  StrategyScenario,
+  TradeoffInsight,
 } from '../../types/api'
 import { isDraftReady, toggleDraftValue } from './model'
 
@@ -13,10 +19,21 @@ interface Props {
   history: AgentMessage[]
   draft: RecommendationDraft
   phase: AgentPhase
+  context: FounderContext
+  assumptions: AgentAssumption[]
+  explorationSummary: Record<string, unknown>
+  scenarios: StrategyScenario[]
+  tradeoffs: TradeoffInsight[]
+  relaxationOptions: RelaxationOption[]
+  dataGaps: DataGap[]
+  selectedScenarioId: 'condition_fit' | 'growth' | 'stability' | null
   comparison: AreaComparison[]
   loading: boolean
   onSend: (message: string) => void
   onConfirm: () => void
+  onSelectScenario: (id: 'condition_fit' | 'growth' | 'stability') => void
+  onApplyRelaxation: (option: RelaxationOption) => void
+  onAssumptionStatus: (id: string, status: AgentAssumption['status']) => void
   onDraftChange: (draft: RecommendationDraft) => void
 }
 
@@ -34,7 +51,9 @@ const importanceFields: Array<{ key: keyof RecommendationDraft; label: string }>
 ]
 
 export function AgentPanel({
-  metadata, history, draft, phase, comparison, loading, onSend, onConfirm, onDraftChange,
+  metadata, history, draft, phase, context, assumptions, explorationSummary, scenarios,
+  tradeoffs, relaxationOptions, dataGaps, selectedScenarioId, comparison, loading,
+  onSend, onConfirm, onSelectScenario, onApplyRelaxation, onAssumptionStatus, onDraftChange,
 }: Props) {
   const [message, setMessage] = useState('')
   const update = <K extends keyof RecommendationDraft>(key: K, value: RecommendationDraft[K]) => {
@@ -80,9 +99,73 @@ export function AgentPanel({
         <button type="submit" disabled={loading || !message.trim()}>보내기</button>
       </form>
 
+      {(context.business_description || context.target_customer || context.operating_pattern || assumptions.length > 0) && (
+        <section className="context-card" aria-label="창업 맥락과 가정">
+          <div className="section-title"><span>창업 맥락</span><small>질문 {context.discovery_question_count}/4</small></div>
+          <dl>
+            {context.business_description && <><dt>사업</dt><dd>{context.business_description}</dd></>}
+            {context.target_customer && <><dt>고객</dt><dd>{context.target_customer}</dd></>}
+            {context.operating_pattern && <><dt>운영</dt><dd>{context.operating_pattern}</dd></>}
+            {context.location_flexibility && <><dt>지역</dt><dd>{formatContextValue(context.location_flexibility)}</dd></>}
+            {context.risk_tolerance && <><dt>위험 선호</dt><dd>{formatContextValue(context.risk_tolerance)}</dd></>}
+          </dl>
+          {assumptions.length > 0 && (
+            <div className="assumption-list">
+              <strong>확인할 가정</strong>
+              {assumptions.filter((item) => item.status !== 'rejected').map((item) => (
+                <div key={item.id} className="assumption-row">
+                  <p>{item.status === 'confirmed' ? '확인됨' : '가정'} · {item.text}</p>
+                  {item.status === 'inferred' && <span>
+                    <button type="button" onClick={() => onAssumptionStatus(item.id, 'confirmed')}>맞아요</button>
+                    <button type="button" onClick={() => onAssumptionStatus(item.id, 'rejected')}>수정할게요</button>
+                  </span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {scenarios.length > 0 && (
+        <section className="scenario-section" aria-label="전략 시나리오 비교">
+          <div className="section-title">
+            <span>전략 가설</span>
+            <small>후보 {String(explorationSummary.eligible_area_count || '-')}곳 탐색</small>
+          </div>
+          <div className="scenario-list">
+            {scenarios.map((scenario) => (
+              <article key={scenario.id} className={selectedScenarioId === scenario.id ? 'scenario-card selected' : 'scenario-card'}>
+                <div><h3>{scenario.title}</h3><strong>{scenario.candidate_count}곳</strong></div>
+                <p>{scenario.description}</p>
+                <ol>
+                  {scenario.recommendations.slice(0, 3).map((item) => (
+                    <li key={item.area_code}><span>{item.area_name}</span><b>{item.final_score.toFixed(1)}</b></li>
+                  ))}
+                </ol>
+                <button type="button" disabled={loading || selectedScenarioId === scenario.id} onClick={() => onSelectScenario(scenario.id)}>
+                  {selectedScenarioId === scenario.id ? '선택됨' : '이 전략 선택'}
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {(tradeoffs.length > 0 || relaxationOptions.length > 0) && (
+        <section className="tradeoff-card" aria-label="상충 조건과 대안">
+          <div className="section-title"><span>상충 조건과 대안</span></div>
+          {tradeoffs.map((item, index) => <p key={`${item.kind}-${index}`} className={item.severity}>• {item.message}</p>)}
+          {relaxationOptions.map((option) => (
+            <button key={option.id} type="button" disabled={loading} onClick={() => onApplyRelaxation(option)}>
+              {option.label} · 후보 {option.candidate_count_before}→{option.candidate_count_after}곳
+            </button>
+          ))}
+        </section>
+      )}
+
       <section className="condition-card" aria-label="추천 조건 카드">
         <div className="condition-heading">
-          <div><span>추천 조건</span><strong>{phase === 'results' ? '분석 완료' : isDraftReady(draft) ? '확인 가능' : '대화 중'}</strong></div>
+          <div><span>추천 조건</span><strong>{phaseLabel(phase, selectedScenarioId)}</strong></div>
           <select value={draft.top_n} onChange={(event) => update('top_n', Number(event.target.value))} aria-label="추천 결과 개수">
             {[5, 10, 15, 20].map((count) => <option key={count} value={count}>{count}곳</option>)}
           </select>
@@ -151,10 +234,11 @@ export function AgentPanel({
           </div>
         </details>
 
-        <button className="confirm-button" type="button" onClick={onConfirm} disabled={loading || !isDraftReady(draft)}>
+        <button className="confirm-button" type="button" onClick={onConfirm} disabled={loading || !isDraftReady(draft) || !selectedScenarioId}>
           이 조건으로 분석
         </button>
-        <small>아파트 시세는 주거 구매력 참고치이며 상가 임대료·보증금 데이터는 포함하지 않습니다.</small>
+        {dataGaps.map((gap) => <small className="data-gap" key={gap.code}>{gap.message}</small>)}
+        <small>아파트 시세는 주거 구매력 참고치이며 상가 임대료·보증금으로 해석하지 않습니다.</small>
       </section>
 
       {comparison.length > 0 && (
@@ -171,6 +255,18 @@ export function AgentPanel({
       )}
     </aside>
   )
+}
+
+function phaseLabel(phase: AgentPhase, selected: string | null): string {
+  if (phase === 'results') return '분석 완료'
+  if (phase === 'exploring') return '데이터 탐색 중'
+  if (selected || phase === 'ready_for_confirmation') return '최종 확인'
+  if (phase === 'scenarios_ready') return '전략 비교'
+  return '맥락 파악 중'
+}
+
+function formatContextValue(value: string): string {
+  return ({ fixed: '지역 고정', flexible: '인접 지역 가능', open: '서울 전체', low: '안정 우선', medium: '균형', high: '기회 우선' } as Record<string, string>)[value] || value
 }
 
 function formatNumber(value: number | null): string {

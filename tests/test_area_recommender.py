@@ -12,6 +12,7 @@ from src.models.area_recommender import (
     RecommendationRequest,
     build_preference_features,
     score_industry_evidence,
+    strategy_evidence_weights,
     validate_request,
     weighted_euclidean_scores,
 )
@@ -112,6 +113,31 @@ class AreaRecommenderTests(unittest.TestCase):
             c_row["reliability_adjusted_evidence_score"],
             c_row["evidence_score_shrinkage"] * 0.9,
         )
+
+    def test_strategy_weights_and_semantic_direction(self) -> None:
+        engine = synthetic_recommender()
+        evidence = engine.evidence.copy()
+        for metric in EVIDENCE_WEIGHTS:
+            evidence[metric] = 0.5
+        growth_metrics = [
+            "yoy_growth_rate", "recent_4q_growth_rate",
+            "long_term_sales_trend_slope", "net_store_growth_rate",
+        ]
+        risk_metrics = [
+            "sales_coefficient_of_variation", "decline_quarter_ratio",
+            "closing_rate", "churn_rate", "recent_closure_rate_increase",
+        ]
+        evidence.loc[3, growth_metrics] = 1.0
+        evidence.loc[3, risk_metrics] = 1.0
+        evidence.loc[4, growth_metrics] = 0.0
+        evidence.loc[4, risk_metrics] = 0.0
+
+        growth = score_industry_evidence(evidence, strategy="growth")
+        stability = score_industry_evidence(evidence, strategy="stability")
+
+        self.assertAlmostEqual(sum(weight for weight, _ in strategy_evidence_weights("growth").values()), 1.0)
+        self.assertGreater(growth.loc[3, "raw_evidence_score"], growth.loc[4, "raw_evidence_score"])
+        self.assertGreater(stability.loc[4, "raw_evidence_score"], stability.loc[3, "raw_evidence_score"])
 
     def test_nan_sales_is_not_converted_to_zero(self) -> None:
         engine = synthetic_recommender()

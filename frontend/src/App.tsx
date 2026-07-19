@@ -3,6 +3,7 @@ import { api } from './api/client'
 import { RecommendationMap } from './components/map/RecommendationMap'
 import { AgentPanel } from './features/agent/AgentPanel'
 import {
+  AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
   draftToRequest,
   isDraftReady,
@@ -10,11 +11,13 @@ import {
   type AgentSession,
 } from './features/agent/model'
 import { RecommendationResults } from './features/recommendation/RecommendationResults'
-import type { AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem } from './types/api'
+import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption } from './types/api'
 
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
-  const [session, setSession] = useState<AgentSession>(() => restoreSession(sessionStorage.getItem(AGENT_SESSION_KEY)))
+  const [session, setSession] = useState<AgentSession>(() => restoreSession(
+    sessionStorage.getItem(AGENT_SESSION_KEY) || sessionStorage.getItem(AGENT_LEGACY_SESSION_KEY),
+  ))
   const [selected, setSelected] = useState<RecommendationItem | null>(() => session.items[0] || null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,9 +49,19 @@ export default function App() {
         ? draftToRequest(response.draft)
         : keepActiveResults ? session.activeRequest : null
       const nextSession: AgentSession = {
+        schemaVersion: 2,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
         draft: response.draft,
         phase: response.phase,
+        context: response.context,
+        assumptions: response.assumptions,
+        explorationSummary: response.exploration_summary,
+        scenarios: response.scenarios.length ? response.scenarios : keepActiveResults ? session.scenarios : [],
+        tradeoffs: response.tradeoffs.length ? response.tradeoffs : keepActiveResults ? session.tradeoffs : [],
+        relaxationOptions: response.relaxation_options.length ? response.relaxation_options : keepActiveResults ? session.relaxationOptions : [],
+        dataGaps: response.data_gaps,
+        selectedScenarioId: response.selected_scenario_id,
+        analysisRevision: response.analysis_revision,
         items,
         comparison: response.comparison.length
           ? response.comparison
@@ -70,16 +83,73 @@ export default function App() {
     message,
     history: session.history.slice(-20),
     draft: session.draft,
+    context: session.context,
+    assumptions: session.assumptions,
+    scenario_id: null,
+    selected_scenario_id: session.selectedScenarioId,
+    analysis_revision: session.analysisRevision,
     active_recommendation_request: session.activeRequest,
   }, true)
 
+  const selectScenario = (scenarioId: 'condition_fit' | 'growth' | 'stability') => executeTurn({
+    action: 'select_scenario',
+    message: `${scenarioId} 시나리오를 선택합니다.`,
+    history: session.history.slice(-20),
+    draft: session.draft,
+    context: session.context,
+    assumptions: session.assumptions,
+    scenario_id: scenarioId,
+    selected_scenario_id: scenarioId,
+    analysis_revision: session.analysisRevision,
+    active_recommendation_request: null,
+  }, false)
+
+  const applyRelaxation = (option: RelaxationOption) => executeTurn({
+    action: 'message',
+    message: `${option.label} 조건을 탐색 조건에 반영해주세요.`,
+    history: session.history.slice(-20),
+    draft: { ...option.request, industry_code: option.request.industry_code },
+    context: session.context,
+    assumptions: session.assumptions,
+    scenario_id: null,
+    selected_scenario_id: null,
+    analysis_revision: session.analysisRevision,
+    active_recommendation_request: null,
+  }, true)
+
+  const updateAssumption = (id: string, status: AgentAssumption['status']) => {
+    setSession((current) => {
+      const target = current.assumptions.find((item) => item.id === id)
+      const assumptions = current.assumptions.map((item) => item.id === id ? { ...item, status } : item)
+      if (status !== 'rejected' || !target) return { ...current, assumptions }
+      const draft = target.source_field === 'min_data_reliability'
+        ? { ...current.draft, min_data_reliability: 0 }
+        : current.draft
+      const context = target.source_field === 'location_flexibility'
+        ? { ...current.context, location_flexibility: null }
+        : target.source_field === 'risk_tolerance'
+          ? { ...current.context, risk_tolerance: null }
+          : current.context
+      return {
+        ...current, assumptions, draft, context, phase: 'discovering', scenarios: [], tradeoffs: [],
+        relaxationOptions: [], selectedScenarioId: null, items: [], comparison: [], activeRequest: null,
+      }
+    })
+  }
+
   const confirm = () => {
     if (!isDraftReady(session.draft)) return setError('업종과 희망 조건을 먼저 알려주세요.')
+    if (!session.selectedScenarioId) return setError('세 가지 전략 중 하나를 먼저 선택해주세요.')
     return executeTurn({
       action: 'confirm_recommendation',
       message: '조건 카드를 확인했습니다. 이 조건으로 추천을 실행해주세요.',
       history: session.history.slice(-20),
       draft: session.draft,
+      context: session.context,
+      assumptions: session.assumptions,
+      scenario_id: null,
+      selected_scenario_id: session.selectedScenarioId,
+      analysis_revision: session.analysisRevision,
       active_recommendation_request: null,
     }, false)
   }
@@ -90,7 +160,11 @@ export default function App() {
     setSession((current) => ({
       ...current,
       draft,
-      phase: isDraftReady(draft) ? 'ready_for_confirmation' : 'gathering',
+      phase: 'discovering',
+      scenarios: [],
+      tradeoffs: [],
+      relaxationOptions: [],
+      selectedScenarioId: null,
       items: [],
       comparison: [],
       activeRequest: null,
@@ -123,10 +197,21 @@ export default function App() {
             history={session.history}
             draft={session.draft}
             phase={session.phase}
+            context={session.context}
+            assumptions={session.assumptions}
+            explorationSummary={session.explorationSummary}
+            scenarios={session.scenarios}
+            tradeoffs={session.tradeoffs}
+            relaxationOptions={session.relaxationOptions}
+            dataGaps={session.dataGaps}
+            selectedScenarioId={session.selectedScenarioId}
             comparison={session.comparison}
             loading={loading}
             onSend={sendMessage}
             onConfirm={confirm}
+            onSelectScenario={selectScenario}
+            onApplyRelaxation={applyRelaxation}
+            onAssumptionStatus={updateAssumption}
             onDraftChange={editDraft}
           />
           <div className="output-area">

@@ -35,6 +35,7 @@ export interface RecommendationRequest {
   excluded_districts: string[]
   min_data_reliability: number
   top_n: number
+  strategy: 'balanced' | 'condition_fit' | 'growth' | 'stability'
 }
 
 export interface FitReason {
@@ -83,7 +84,7 @@ export interface ApiErrorBody {
   detail?: Array<{ msg: string }>
 }
 
-export type AgentPhase = 'gathering' | 'ready_for_confirmation' | 'results'
+export type AgentPhase = 'discovering' | 'exploring' | 'scenarios_ready' | 'ready_for_confirmation' | 'results'
 
 export interface AgentMessage {
   role: 'user' | 'assistant'
@@ -92,6 +93,56 @@ export interface AgentMessage {
 
 export interface RecommendationDraft extends Omit<RecommendationRequest, 'industry_code'> {
   industry_code: string | null
+}
+
+export interface FounderContext {
+  business_description: string | null
+  target_customer: string | null
+  operating_pattern: string | null
+  location_flexibility: 'fixed' | 'flexible' | 'open' | null
+  risk_tolerance: 'low' | 'medium' | 'high' | null
+  budget_note: string | null
+  priorities: string[]
+  discovery_question_count: number
+}
+
+export interface AgentAssumption {
+  id: string
+  text: string
+  source_field: string
+  status: 'inferred' | 'confirmed' | 'rejected'
+}
+
+export interface StrategyScenario {
+  id: 'condition_fit' | 'growth' | 'stability'
+  strategy: 'condition_fit' | 'growth' | 'stability'
+  title: string
+  description: string
+  request: RecommendationRequest
+  candidate_count: number
+  recommendations: RecommendationItem[]
+  diagnostics: Record<string, unknown>
+  relaxed_fields: string[]
+}
+
+export interface TradeoffInsight {
+  kind: 'candidate_scarcity' | 'preference_conflict' | 'strategy_disagreement'
+  message: string
+  severity: 'info' | 'warning'
+}
+
+export interface RelaxationOption {
+  id: string
+  label: string
+  relaxed_fields: Array<'preferred_districts' | 'preferred_area_types'>
+  candidate_count_before: number
+  candidate_count_after: number
+  request: RecommendationRequest
+}
+
+export interface DataGap {
+  code: 'commercial_cost'
+  message: string
 }
 
 export interface AreaComparison {
@@ -117,10 +168,15 @@ export interface AreaComparison {
 }
 
 export interface AgentTurnRequest {
-  action: 'message' | 'confirm_recommendation'
+  action: 'message' | 'select_scenario' | 'confirm_recommendation'
   message: string
   history: AgentMessage[]
   draft: RecommendationDraft
+  context: FounderContext
+  assumptions: AgentAssumption[]
+  scenario_id: 'condition_fit' | 'growth' | 'stability' | null
+  selected_scenario_id: 'condition_fit' | 'growth' | 'stability' | null
+  analysis_revision: number
   active_recommendation_request: RecommendationRequest | null
 }
 
@@ -130,8 +186,17 @@ export interface AgentTurnResponse {
   assistant_message: string
   phase: AgentPhase
   draft: RecommendationDraft
+  context: FounderContext
+  assumptions: AgentAssumption[]
   missing_fields: string[]
   confirmation_summary: string | null
+  exploration_summary: Record<string, unknown>
+  scenarios: StrategyScenario[]
+  tradeoffs: TradeoffInsight[]
+  relaxation_options: RelaxationOption[]
+  data_gaps: DataGap[]
+  selected_scenario_id: 'condition_fit' | 'growth' | 'stability' | null
+  analysis_revision: number
   recommendations: RecommendationItem[]
   diagnostics: Record<string, unknown>
   comparison: AreaComparison[]

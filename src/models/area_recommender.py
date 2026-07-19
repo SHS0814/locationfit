@@ -30,6 +30,27 @@ EVIDENCE_WEIGHTS: dict[str, tuple[float, Literal["positive", "negative"]]] = {
     "recent_closure_rate_increase": (0.02, "negative"),
     "net_store_growth_rate": (0.04, "positive"),
 }
+RecommendationStrategy = Literal["balanced", "condition_fit", "growth", "stability"]
+POLICY_VERSION = "strategy-v1"
+STRATEGY_FINAL_WEIGHTS: dict[str, dict[str, float]] = {
+    "balanced": FINAL_WEIGHTS,
+    "condition_fit": {"condition_fit_score": 0.75, "reliability_adjusted_evidence_score": 0.25},
+    "growth": {"condition_fit_score": 0.45, "reliability_adjusted_evidence_score": 0.55},
+    "stability": {"condition_fit_score": 0.45, "reliability_adjusted_evidence_score": 0.55},
+}
+EVIDENCE_GROUPS: dict[str, tuple[str, ...]] = {
+    "scale_productivity": ("recent_4q_average_sales", "recent_4q_average_sales_per_store"),
+    "growth": ("yoy_growth_rate", "recent_4q_growth_rate", "long_term_sales_trend_slope", "net_store_growth_rate"),
+    "stability": ("sales_coefficient_of_variation", "decline_quarter_ratio"),
+    "competition": ("competition_intensity",),
+    "closure_risk": ("closing_rate", "churn_rate", "recent_closure_rate_increase"),
+}
+STRATEGY_GROUP_WEIGHTS: dict[str, dict[str, float]] = {
+    "balanced": {"scale_productivity": 0.35, "growth": 0.27, "stability": 0.18, "competition": 0.08, "closure_risk": 0.12},
+    "condition_fit": {"scale_productivity": 0.35, "growth": 0.27, "stability": 0.18, "competition": 0.08, "closure_risk": 0.12},
+    "growth": {"scale_productivity": 0.25, "growth": 0.50, "stability": 0.08, "competition": 0.07, "closure_risk": 0.10},
+    "stability": {"scale_productivity": 0.20, "growth": 0.10, "stability": 0.35, "competition": 0.10, "closure_risk": 0.25},
+}
 DEFAULT_K = 50
 C_GRADE_PENALTY = 0.90
 RECENT_PROFILE_QUARTERS = ["20251", "20252", "20253", "20254"]
@@ -97,6 +118,7 @@ class RecommendationRequest:
     excluded_districts: tuple[str, ...] = ()
     min_data_reliability: float = 0.0
     top_n: int = 10
+    strategy: RecommendationStrategy = "balanced"
 
 
 @dataclass(frozen=True)
@@ -152,6 +174,8 @@ def validate_request(
     _validate_importance(float(request.min_data_reliability), "min_data_reliability")
     if request.top_n < 1 or request.top_n > 100:
         raise ValueError("top_n은 1~100 사이여야 합니다.")
+    if request.strategy not in STRATEGY_FINAL_WEIGHTS:
+        raise ValueError(f"지원하지 않는 strategy입니다: {request.strategy}")
     condition_values = [
         request.preferred_area_types,
         request.target_gender,
@@ -319,14 +343,33 @@ def robust_percentile(series: pd.Series, *, positive: bool) -> pd.Series:
     return result
 
 
-def score_industry_evidence(industry_evidence: pd.DataFrame) -> pd.DataFrame:
+def strategy_evidence_weights(strategy: RecommendationStrategy) -> dict[str, tuple[float, Literal["positive", "negative"]]]:
+    """Expand versioned group weights while preserving metric directions and relative weights."""
+    group_weights = STRATEGY_GROUP_WEIGHTS[strategy]
+    expanded: dict[str, tuple[float, Literal["positive", "negative"]]] = {}
+    for group, metrics in EVIDENCE_GROUPS.items():
+        base_total = sum(EVIDENCE_WEIGHTS[metric][0] for metric in metrics)
+        for metric in metrics:
+            base_weight, direction = EVIDENCE_WEIGHTS[metric]
+            expanded[metric] = (group_weights[group] * base_weight / base_total, direction)
+    if not np.isclose(sum(weight for weight, _ in expanded.values()), 1.0):
+        raise ValueError(f"{strategy} evidence weights must sum to 1")
+    return expanded
+
+
+def score_industry_evidence(
+    industry_evidence: pd.DataFrame,
+    *,
+    strategy: RecommendationStrategy = "balanced",
+) -> pd.DataFrame:
     """Percentile-score observed metrics and shrink scores toward the industry mean."""
     if industry_evidence["industry_code"].nunique() != 1:
         raise ValueError("score_industry_evidence에는 단일 업종만 전달해야 합니다.")
     scored = industry_evidence.copy()
     weighted_sum = pd.Series(0.0, index=scored.index)
     available_weight = pd.Series(0.0, index=scored.index)
-    for metric, (weight, direction) in EVIDENCE_WEIGHTS.items():
+    evidence_weights = strategy_evidence_weights(strategy)
+    for metric, (weight, direction) in evidence_weights.items():
         if metric not in scored:
             raise ValueError(f"evidence 지표 컬럼 누락: {metric}")
         score_column = f"evidence_component_{metric}"
@@ -334,7 +377,7 @@ def score_industry_evidence(industry_evidence: pd.DataFrame) -> pd.DataFrame:
         valid = scored[score_column].notna()
         weighted_sum.loc[valid] += weight * scored.loc[valid, score_column]
         available_weight.loc[valid] += weight
-    scored["evidence_metric_coverage"] = available_weight / sum(weight for weight, _ in EVIDENCE_WEIGHTS.values())
+    scored["evidence_metric_coverage"] = available_weight / sum(weight for weight, _ in evidence_weights.values())
     scored["raw_evidence_score"] = np.divide(
         weighted_sum,
         available_weight,
@@ -504,7 +547,7 @@ class AreaRecommender:
         structural = self.index.merge(condition, on="area_code", how="left", validate="one_to_one")
         structural = self._hard_filter(structural, request)
         industry_raw = self.evidence.loc[self.evidence["industry_code"].eq(request.industry_code)].copy()
-        industry_scored = score_industry_evidence(industry_raw)
+        industry_scored = score_industry_evidence(industry_raw, strategy=request.strategy)
         d_count = int(industry_scored["reliability_grade"].eq("D").sum())
         stale_count = int(industry_scored["stale_observation_flag"].eq(1).sum())
         candidates = structural.merge(industry_scored, on="area_code", how="inner", suffixes=("", "_evidence"), validate="one_to_one")
@@ -516,9 +559,10 @@ class AreaRecommender:
         candidates = candidates.sort_values(["condition_fit_score", "area_code"], ascending=[False, True]).head(k).copy()
         if candidates.empty:
             raise ValueError("필터와 신뢰도 조건을 만족하는 추천 후보가 없습니다.")
+        final_weights = STRATEGY_FINAL_WEIGHTS[request.strategy]
         candidates["final_score"] = (
-            FINAL_WEIGHTS["condition_fit_score"] * candidates["condition_fit_score"]
-            + FINAL_WEIGHTS["reliability_adjusted_evidence_score"] * candidates["reliability_adjusted_evidence_score"]
+            final_weights["condition_fit_score"] * candidates["condition_fit_score"]
+            + final_weights["reliability_adjusted_evidence_score"] * candidates["reliability_adjusted_evidence_score"]
         ).clip(0, 100)
         candidates = candidates.sort_values(["final_score", "condition_fit_score", "area_code"], ascending=[False, False, True]).reset_index(drop=True)
         candidates["rank"] = np.arange(1, len(candidates) + 1)
@@ -564,6 +608,10 @@ class AreaRecommender:
             "condition_feature_count": len(preferences),
             "condition_features": [preference.feature for preference in preferences],
             "evidence_adjustment": "industry_mean_shrinkage_with_C_10pct_penalty",
+            "strategy": request.strategy,
+            "policy_version": POLICY_VERSION,
+            "final_weights": final_weights,
+            "evidence_group_weights": STRATEGY_GROUP_WEIGHTS[request.strategy],
         }
         return RecommendationResult(recommendations, candidates, diagnostics, preferences)
 

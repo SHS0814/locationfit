@@ -23,6 +23,12 @@ describe('agent session model', () => {
       activeRequest: draftToRequest(draft),
     }))
     expect(restored.draft.industry_code).toBe('CS100001')
-    expect(restoreSession('{broken').phase).toBe('gathering')
+    expect(restored.schemaVersion).toBe(2)
+    expect(restored.context.discovery_question_count).toBe(0)
+    expect(restoreSession('{broken').phase).toBe('discovering')
+  })
+
+  it('does not treat a strategy selection as a location preference', () => {
+    expect(isDraftReady({ ...emptyDraft, industry_code: 'CS100001', strategy: 'growth' })).toBe(false)
   })
 })

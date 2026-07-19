@@ -105,6 +105,36 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
 .chat-composer textarea { width: 100%; resize: none; padding: 9px 10px; border: 1px solid #d8d6cf; border-radius: 4px; color: #262622; background: #fff; font-size: 12px; line-height: 1.5; }
 .chat-composer button { min-width: 58px; border: 0; border-radius: 4px; background: #26322c; color: #ffcf19; font-size: 12px; font-weight: 700; }
 .chat-composer button:disabled { opacity: .45; cursor: default; }
+.section-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.section-title span { color: #353832; font-size: 12px; font-weight: 800; }
+.section-title small { color: #85827a; font-size: 9px; }
+.context-card, .scenario-section, .tradeoff-card { padding: 17px 22px; border-bottom: 1px solid #e6e3db; background: #fff; }
+.context-card dl { display: grid; grid-template-columns: 55px minmax(0, 1fr); gap: 5px 8px; margin: 0; }
+.context-card dt { color: #85827a; font-size: 10px; font-weight: 700; }
+.context-card dd { margin: 0; color: #4a4944; font-size: 10px; line-height: 1.5; }
+.assumption-list { margin-top: 10px; padding: 9px 10px; border-left: 3px solid #e9c338; background: #fffbed; }
+.assumption-list strong { display: block; margin-bottom: 4px; color: #6e5a13; font-size: 9px; }
+.assumption-list p { margin: 3px 0; color: #736a4b; font-size: 9px; line-height: 1.45; }
+.assumption-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+.assumption-row span { display: flex; gap: 3px; }
+.assumption-row button { padding: 2px 5px; border: 1px solid #d8c77e; border-radius: 2px; background: #fff; color: #66591e; font-size: 8px; }
+.scenario-list { display: grid; gap: 9px; }
+.scenario-card { padding: 12px; border: 1px solid #dfdcd3; border-radius: 5px; background: #faf9f5; }
+.scenario-card.selected { border-color: #27815b; box-shadow: inset 3px 0 #27815b; background: #f4faf7; }
+.scenario-card > div { display: flex; justify-content: space-between; align-items: center; }
+.scenario-card h3 { margin: 0; font-size: 12px; }
+.scenario-card > div > strong { color: #2d6c50; font-size: 10px; }
+.scenario-card > p { margin: 5px 0 8px; color: #77746d; font-size: 9px; line-height: 1.45; }
+.scenario-card ol { margin: 0 0 9px; padding-left: 21px; }
+.scenario-card li { padding: 2px 0; color: #55534d; font-size: 10px; }
+.scenario-card li span { display: inline-block; min-width: 130px; }
+.scenario-card li b { color: #2d6c50; }
+.scenario-card button, .tradeoff-card button { min-height: 31px; padding: 0 10px; border: 1px solid #c8c5bb; border-radius: 3px; background: #fff; color: #393934; font-size: 10px; font-weight: 700; }
+.scenario-card button:disabled { border-color: #9fc7b5; color: #26704f; background: #eaf5ef; }
+.tradeoff-card > p { margin: 6px 0; color: #66635c; font-size: 10px; line-height: 1.5; }
+.tradeoff-card > p.warning { color: #986215; }
+.tradeoff-card button { width: 100%; margin-top: 7px; text-align: left; }
+.data-gap { padding: 7px 8px; background: #fff7e8; color: #8b641d !important; }
 .condition-card { padding: 20px 22px 24px; }
 .condition-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .condition-heading > div { display: flex; align-items: center; gap: 7px; }

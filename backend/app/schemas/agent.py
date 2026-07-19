@@ -14,6 +14,30 @@ class AgentMessage(BaseModel):
     content: str = Field(min_length=1, max_length=2_000)
 
 
+class FounderContext(BaseModel):
+    """Narrative founder context that must not be confused with scored engine inputs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    business_description: str | None = Field(default=None, max_length=500)
+    target_customer: str | None = Field(default=None, max_length=300)
+    operating_pattern: str | None = Field(default=None, max_length=300)
+    location_flexibility: Literal["fixed", "flexible", "open"] | None = None
+    risk_tolerance: Literal["low", "medium", "high"] | None = None
+    budget_note: str | None = Field(default=None, max_length=300)
+    priorities: list[str] = Field(default_factory=list, max_length=5)
+    discovery_question_count: int = Field(0, ge=0, le=4)
+
+
+class AgentAssumption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=80)
+    text: str = Field(min_length=1, max_length=300)
+    source_field: str = Field(min_length=1, max_length=80)
+    status: Literal["inferred", "confirmed", "rejected"] = "inferred"
+
+
 class RecommendationDraft(BaseModel):
     """Editable recommendation conditions while the conversation is in progress."""
 
@@ -40,9 +64,10 @@ class RecommendationDraft(BaseModel):
     excluded_districts: list[str] = Field(default_factory=list)
     min_data_reliability: float = Field(0, ge=0, le=1)
     top_n: int = Field(10, ge=1, le=50)
+    strategy: Literal["balanced", "condition_fit", "growth", "stability"] = "balanced"
 
     def has_preference(self) -> bool:
-        values = self.model_dump(exclude={"industry_code", "top_n"}).values()
+        values = self.model_dump(exclude={"industry_code", "top_n", "strategy"}).values()
         return any(bool(value) for value in values)
 
     def to_request(self) -> RecommendationRequestSchema:
@@ -60,6 +85,8 @@ class AgentDecision(BaseModel):
 
     assistant_message: str = Field(min_length=1, max_length=2_000)
     draft: RecommendationDraft
+    context: FounderContext = Field(default_factory=FounderContext)
+    assumptions: list[AgentAssumption] = Field(default_factory=list, max_length=10)
     missing_fields: list[str] = Field(default_factory=list, max_length=5)
     comparison_area_codes: list[str] = Field(default_factory=list, max_length=5)
 
@@ -67,17 +94,64 @@ class AgentDecision(BaseModel):
 class AgentTurnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    action: Literal["message", "confirm_recommendation"] = "message"
+    action: Literal["message", "select_scenario", "confirm_recommendation"] = "message"
     message: str = Field(min_length=1, max_length=2_000)
     history: list[AgentMessage] = Field(default_factory=list, max_length=20)
     draft: RecommendationDraft = Field(default_factory=RecommendationDraft)
+    context: FounderContext = Field(default_factory=FounderContext)
+    assumptions: list[AgentAssumption] = Field(default_factory=list, max_length=10)
+    scenario_id: Literal["condition_fit", "growth", "stability"] | None = None
+    selected_scenario_id: Literal["condition_fit", "growth", "stability"] | None = None
+    analysis_revision: int = Field(0, ge=0)
     active_recommendation_request: RecommendationRequestSchema | None = None
 
     @model_validator(mode="after")
     def confirmation_requires_ready_draft(self) -> "AgentTurnRequest":
         if self.action == "confirm_recommendation":
             self.draft.to_request()
+        if self.action == "select_scenario" and self.scenario_id is None:
+            raise ValueError("선택할 scenario_id가 필요합니다.")
         return self
+
+
+class StrategyScenario(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: Literal["condition_fit", "growth", "stability"]
+    strategy: Literal["condition_fit", "growth", "stability"]
+    title: str
+    description: str
+    request: RecommendationRequestSchema
+    candidate_count: int
+    recommendations: list[RecommendationItem] = Field(default_factory=list)
+    diagnostics: dict[str, object] = Field(default_factory=dict)
+    relaxed_fields: list[str] = Field(default_factory=list)
+
+
+class TradeoffInsight(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["candidate_scarcity", "preference_conflict", "strategy_disagreement"]
+    message: str
+    severity: Literal["info", "warning"]
+
+
+class RelaxationOption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    label: str
+    relaxed_fields: list[Literal["preferred_districts", "preferred_area_types"]]
+    candidate_count_before: int
+    candidate_count_after: int
+    request: RecommendationRequestSchema
+
+
+class DataGap(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: Literal["commercial_cost"]
+    message: str
 
 
 class AreaComparison(BaseModel):
@@ -106,10 +180,19 @@ class AgentTurnResponse(BaseModel):
     request_id: str
     artifact_version: str
     assistant_message: str
-    phase: Literal["gathering", "ready_for_confirmation", "results"]
+    phase: Literal["discovering", "exploring", "scenarios_ready", "ready_for_confirmation", "results"]
     draft: RecommendationDraft
+    context: FounderContext = Field(default_factory=FounderContext)
+    assumptions: list[AgentAssumption] = Field(default_factory=list)
     missing_fields: list[str] = Field(default_factory=list)
     confirmation_summary: str | None = None
+    exploration_summary: dict[str, object] = Field(default_factory=dict)
+    scenarios: list[StrategyScenario] = Field(default_factory=list)
+    tradeoffs: list[TradeoffInsight] = Field(default_factory=list)
+    relaxation_options: list[RelaxationOption] = Field(default_factory=list)
+    data_gaps: list[DataGap] = Field(default_factory=list)
+    selected_scenario_id: Literal["condition_fit", "growth", "stability"] | None = None
+    analysis_revision: int = 0
     recommendations: list[RecommendationItem] = Field(default_factory=list)
     diagnostics: dict[str, object] = Field(default_factory=dict)
     comparison: list[AreaComparison] = Field(default_factory=list)
