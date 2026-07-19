@@ -1,0 +1,184 @@
+analysis_period:
+  start_quarter: 20211
+  end_quarter: 20254
+
+area_profile_period:
+  start_quarter: 20241
+  end_quarter: 20254
+
+future_validation:
+  enabled: false
+  quarter: 20261
+
+time_decay:
+  base: 0.94
+
+api:
+  base_url: http://openapi.seoul.go.kr:8088
+  page_size: 1000
+  timeout_seconds: 30
+  max_retries: 3
+  retry_wait_seconds: 1.0
+
+canonical_keys:
+  quarter: 기준_년분기_코드
+  area_code: 상권_코드
+  area_name: 상권_코드_명
+  industry_code: 서비스_업종_코드
+  industry_name: 서비스_업종_코드_명
+
+# api_service_name values below were checked against the Seoul Open Data Plaza
+# OpenAPI specifications.
+datasets:
+  area:
+    title: 서울시 상권분석서비스(영역-상권)
+    required: true
+    download_enabled: true
+    use_existing_files: true
+    quarterly: false
+    folder: data/raw/area
+    output_prefix: area
+    api_service_name: TbgisTrdarRelm
+    dataset_id: OA-15560
+    page: https://data.seoul.go.kr/dataList/OA-15560/A/1/datasetView.do
+    grain: area
+    required_keys: [상권_코드]
+    expected_start_quarter: null
+    expected_end_quarter: null
+    quarter_filter: {mode: none}
+
+  sales:
+    title: 서울시 상권분석서비스(추정매출-상권)
+    required: true
+    download_enabled: false
+    use_existing_files: true
+    quarterly: true
+    folder: data/raw/sales
+    output_prefix: sales
+    api_service_name: VwsmTrdarSelngQq
+    dataset_id: OA-15572
+    page: https://data.seoul.go.kr/dataList/OA-15572/A/1/datasetView.do
+    grain: quarter_area_industry
+    required_keys: [기준_년분기_코드, 상권_코드, 서비스_업종_코드]
+    expected_start_quarter: 20211
+    expected_end_quarter: 20254
+    quarter_filter: {mode: path}
+
+  stores:
+    title: 서울시 상권분석서비스(점포-상권)
+    required: true
+    download_enabled: true
+    use_existing_files: true
+    quarterly: true
+    folder: data/raw/stores
+    output_prefix: stores
+    api_service_name: VwsmTrdarStorQq
+    dataset_id: OA-15577
+    page: https://data.seoul.go.kr/dataList/OA-15577/A/1/datasetView.do
+    grain: quarter_area_industry
+    required_keys: [기준_년분기_코드, 상권_코드, 서비스_업종_코드]
+    expected_start_quarter: 20211
+    expected_end_quarter: 20254
+    quarter_filter: {mode: path}
+
+  floating_population:
+    title: 서울시 상권분석서비스(길단위인구-상권)
+    required: true
+    download_enabled: true
+    use_existing_files: true
+    quarterly: true
+    folder: data/raw/floating_population
+    output_prefix: floating_population
+    api_service_name: VwsmTrdarFlpopQq
+    dataset_id: OA-15568
+    page: https://data.seoul.go.kr/dataList/OA-15568/A/1/datasetView.do
+    grain: quarter_area
+    required_keys: [기준_년분기_코드, 상권_코드]
+    expected_start_quarter: 20211
+    expected_end_quarter: 20254
+    quarter_filter: {mode: path}
+
+  resident_population:
+    title: 서울시 상권분석서비스(상주인구-상권)
+    required: true
+    download_enabled: true
+    use_existing_files: true
+    quarterly: true
+    folder: data/raw/resident_population
+    output_prefix: resident_population
+    api_service_name: VwsmTrdarRepopQq
+    dataset_id: OA-15584
+    page: https://data.seoul.go.kr/dataList/OA-15584/A/1/datasetView.do
+    grain: quarter_area
+    required_keys: [기준_년분기_코드, 상권_코드]
+    expected_start_quarter: 20211
+    expected_end_quarter: 20254
+    quarter_filter: {mode: local}
+
+  worker_population:
+    title: 서울시 상권분석서비스(직장인구-상권)
+    required: true
+    download_enabled: true
+    use_existing_files: true
+    quarterly: true
+    folder: data/raw/worker_population
+    output_prefix: worker_population
+    api_service_name: VwsmTrdarWrcPopltnQq
+    dataset_id: OA-15569
+    page: https://data.seoul.go.kr/dataList/OA-15569/A/1/datasetView.do
+    grain: quarter_area
+    required_keys: [기준_년분기_코드, 상권_코드]
+    expected_start_quarter: 20211
+    expected_end_quarter: 20254
+    quarter_filter: {mode: local}
+
+  facilities:
+    title: 서울시 상권분석서비스(집객시설-상권)
+    required: true
+    download_enabled: true
+    use_existing_files: true
+    quarterly: true
+    folder: data/raw/facilities
+    output_prefix: facilities
+    api_service_name: VwsmTrdarFcltyQq
+    dataset_id: OA-15580
+    page: https://data.seoul.go.kr/dataList/OA-15580/A/1/datasetView.do
+    grain: quarter_area
+    required_keys: [기준_년분기_코드, 상권_코드]
+    expected_start_quarter: 20211
+    expected_end_quarter: 20254
+    quarter_filter: {mode: local}
+
+  apartments:
+    title: 서울시 상권분석서비스(아파트-상권)
+    required: true
+    download_enabled: true
+    use_existing_files: true
+    quarterly: true
+    folder: data/raw/apartments
+    output_prefix: apartments
+    api_service_name: InfoTrdarAptQq
+    dataset_id: OA-15566
+    page: https://data.seoul.go.kr/dataList/OA-15566/A/1/datasetView.do
+    grain: quarter_area
+    required_keys: [기준_년분기_코드, 상권_코드]
+    expected_start_quarter: 20211
+    expected_end_quarter: 20254
+    quarter_filter: {mode: local}
+
+  commercial_change:
+    title: 서울시 상권분석서비스(상권변화지표-상권)
+    required: false
+    download_enabled: true
+    use_existing_files: true
+    quarterly: true
+    folder: data/raw/commercial_change
+    output_prefix: commercial_change
+    api_service_name: VwsmTrdarIxQq
+    dataset_id: OA-15576
+    page: https://data.seoul.go.kr/dataList/OA-15576/A/1/datasetView.do
+    grain: quarter_area
+    required_keys: [기준_년분기_코드, 상권_코드]
+    expected_start_quarter: 20211
+    expected_end_quarter: 20254
+    quarter_filter: {mode: path}

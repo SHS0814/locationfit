@@ -1,0 +1,75 @@
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Secrets and local environment overrides
+.env
+.env.*
+!.env.example
+!**/.env.example
+.envrc
+.direnv/
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+
+# Python
+*.py[cod]
+*$py.class
+__pycache__/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/*.executed.ipynb
+
+# Frontend / Node.js
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+.vite/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Downloaded and generated datasets
+/data/raw/
+/data/interim/
+/data/processed/
+
+# Generated reports and temporary outputs
+/outputs/
+
+# Local databases and temporary files
+*.sqlite
+*.sqlite3
+*.db
+*.tmp
+*.temp
+
+# backend/artifacts/current is intentionally versioned for container deployment.

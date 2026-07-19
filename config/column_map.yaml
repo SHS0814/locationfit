@@ -1,0 +1,15 @@
+기준_년분기_코드: quarter
+기준년분기코드: quarter
+STDR_YYQU_CD: quarter
+상권_코드: area_code
+상권코드: area_code
+TRDAR_CD: area_code
+상권_코드_명: area_name
+상권코드명: area_name
+TRDAR_CD_NM: area_name
+서비스_업종_코드: industry_code
+서비스업종코드: industry_code
+SVC_INDUTY_CD: industry_code
+서비스_업종_코드_명: industry_name
+서비스업종코드명: industry_name
+SVC_INDUTY_CD_NM: industry_name

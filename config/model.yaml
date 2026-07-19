@@ -1,0 +1,16 @@
+model:
+  structure_fit_weight: 0.60
+  historical_performance_weight: 0.40
+  success_reference_quantile: 0.75
+  n_neighbors: 15
+  scaler: robust
+performance:
+  weights:
+    sales_per_store: 0.35
+    growth: 0.25
+    stability: 0.20
+    churn_stability: 0.20
+  min_observed_quarters: 4
+  min_mean_store_count: 3
+  target_observed_quarters: 7
+  target_mean_store_count: 10

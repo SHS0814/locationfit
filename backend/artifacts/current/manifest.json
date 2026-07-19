@@ -1,0 +1,23 @@
+{
+  "artifact_version": "2025q4-v1",
+  "schema_version": 1,
+  "created_at": "2026-07-16T14:46:12.972515+00:00",
+  "coordinate_reference": {
+    "source": "EPSG:5181",
+    "target": "EPSG:4326"
+  },
+  "data_period": {
+    "performance": "2021Q1~2025Q4",
+    "profile": "2024Q1~2025Q4"
+  },
+  "files": {
+    "area_recommendation_index.parquet": {
+      "rows": 1650,
+      "sha256": "0d6962f8e60e8168b2909b386f4e050c594beb211f82f827e5c93606533dc869"
+    },
+    "area_industry_evidence.parquet": {
+      "rows": 26810,
+      "sha256": "840eeea42860d09800fff2abbfe42af1d3aee8b5723d1f125c08cb9599d6bf7b"
+    }
+  }
+}
