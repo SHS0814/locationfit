@@ -23,7 +23,8 @@ describe('agent session model', () => {
       activeRequest: draftToRequest(draft),
     }))
     expect(restored.draft.industry_code).toBe('CS100001')
-    expect(restored.schemaVersion).toBe(2)
+    expect(restored.schemaVersion).toBe(3)
+    expect(restored.recommendationReport).toBeNull()
     expect(restored.context.discovery_question_count).toBe(0)
     expect(restoreSession('{broken').phase).toBe('discovering')
   })

@@ -10,6 +10,7 @@ import pandas as pd
 from backend.app.schemas.recommendation import RecommendationRequestSchema
 from backend.app.services.artifact_loader import load_artifacts
 from backend.recommender import AreaRecommender, RecommendationRequest
+from src.models.area_recommender import RecommendationResult
 
 
 AGE_OPTIONS = [
@@ -22,6 +23,20 @@ TIME_OPTIONS = [
     {"code": "11_14", "name": "11~14시"}, {"code": "14_17", "name": "14~17시"},
     {"code": "17_21", "name": "17~21시"}, {"code": "21_24", "name": "21~24시"},
 ]
+
+REPORT_METRICS = (
+    "final_score",
+    "condition_fit_score",
+    "reliability_adjusted_evidence_score",
+    "recent_4q_average_sales",
+    "recent_4q_growth_rate",
+    "competition_intensity",
+    "closing_rate",
+    "floating_population",
+    "resident_population",
+    "worker_population",
+    "data_reliability",
+)
 
 
 def _json_safe(value: Any) -> Any:
@@ -80,7 +95,7 @@ class RecommenderService:
             "time_bands": TIME_OPTIONS,
         }
 
-    def recommend(self, payload: RecommendationRequestSchema) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    def _run_recommendation(self, payload: RecommendationRequestSchema) -> RecommendationResult:
         values = payload.model_dump()
         for field in (
             "preferred_area_types", "target_age_groups", "preferred_time_bands",
@@ -88,7 +103,9 @@ class RecommenderService:
         ):
             values[field] = tuple(values[field])
         request = RecommendationRequest(**values)
-        result = self.engine.recommend(request)
+        return self.engine.recommend(request)
+
+    def _serialize_recommendations(self, result: RecommendationResult) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         for row in result.recommendations.to_dict(orient="records"):
             location = self.location_lookup[str(row["area_code"])]
@@ -114,7 +131,82 @@ class RecommenderService:
                 "evidence_summary": _json_safe(json.loads(row["evidence_summary"])),
                 "warnings": json.loads(row["warning_messages"]),
             })
+        return items
+
+    def recommend(self, payload: RecommendationRequestSchema) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        result = self._run_recommendation(payload)
+        items = self._serialize_recommendations(result)
         return items, _json_safe(result.diagnostics)
+
+    def recommend_with_report(
+        self,
+        payload: RecommendationRequestSchema,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+        """Return ranked items and a top-three report against the full eligible population."""
+        result = self._run_recommendation(payload)
+        items = self._serialize_recommendations(result)
+        return items, _json_safe(result.diagnostics), self._build_recommendation_report(result, items)
+
+    def _build_recommendation_report(
+        self,
+        result: RecommendationResult,
+        items: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        eligible = result.eligible_candidates.copy()
+
+        def metric_values(row: dict[str, Any]) -> dict[str, Any]:
+            return _json_safe({metric: row.get(metric) for metric in REPORT_METRICS})
+
+        benchmark: dict[str, Any] = {}
+        for metric in REPORT_METRICS:
+            values = pd.to_numeric(eligible.get(metric), errors="coerce").dropna()
+            benchmark[metric] = float(values.median()) if not values.empty else None
+        benchmark = _json_safe(benchmark)
+
+        eligible_lookup = {
+            str(row["area_code"]): row
+            for row in eligible.to_dict(orient="records")
+        }
+        areas: list[dict[str, Any]] = []
+        for item in items[:3]:
+            source = eligible_lookup[str(item["area_code"])]
+            metrics = metric_values(source)
+            # Keep public recommendation scores byte-for-byte aligned with the result cards.
+            for score in (
+                "final_score",
+                "condition_fit_score",
+                "reliability_adjusted_evidence_score",
+            ):
+                metrics[score] = item.get(score)
+            delta = {
+                metric: (
+                    None
+                    if metrics.get(metric) is None or benchmark.get(metric) is None
+                    else float(metrics[metric]) - float(benchmark[metric])
+                )
+                for metric in REPORT_METRICS
+            }
+            areas.append(_json_safe({
+                "rank": item["rank"],
+                "area_code": item["area_code"],
+                "area_name": item["area_name"],
+                "district_name": item["district_name"],
+                "area_type": item["area_type"],
+                "reliability_grade": item["reliability_grade"],
+                "metrics": metrics,
+                "benchmark_delta": delta,
+                "positive_reasons": item["positive_reasons"],
+                "negative_reasons": item["negative_reasons"],
+                "warnings": item["warnings"],
+            }))
+
+        return {
+            "candidate_count": len(eligible),
+            "benchmark_label": "동일 조건 전체 후보 중앙값",
+            "data_period": self.manifest.get("data_period", {}),
+            "benchmark": benchmark,
+            "areas": areas,
+        }
 
     def inspect_market_landscape(self, payload: RecommendationRequestSchema) -> dict[str, Any]:
         """Return bounded aggregate facts for agent exploration without exposing raw tables."""

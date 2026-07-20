@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from backend.app.schemas.recommendation import RecommendationRequestSchema
 from backend.app.services.recommender_service import RecommenderService
 
@@ -25,6 +27,27 @@ def test_metadata_and_recommendation_with_real_artifacts() -> None:
     assert all(37.0 < item["latitude"] < 38.0 for item in recommendations)
     assert all(126.0 < item["longitude"] < 128.0 for item in recommendations)
     assert isinstance(recommendations[0]["positive_reasons"], list)
+
+
+def test_recommendation_report_compares_top_three_with_full_eligible_median() -> None:
+    service = RecommenderService(ARTIFACT_DIR)
+    request = RecommendationRequestSchema(
+        industry_code="CS100001",
+        target_age_groups=["20"],
+        top_n=5,
+    )
+    recommendations, diagnostics, report = service.recommend_with_report(request)
+    engine_result = service._run_recommendation(request)
+
+    assert [area["area_code"] for area in report["areas"]] == [
+        item["area_code"] for item in recommendations[:3]
+    ]
+    assert report["candidate_count"] == diagnostics["eligible_candidates_before_k"]
+    assert report["candidate_count"] == len(engine_result.eligible_candidates)
+    assert report["benchmark"]["recent_4q_average_sales"] == pytest.approx(
+        engine_result.eligible_candidates["recent_4q_average_sales"].median()
+    )
+    assert report["areas"][0]["metrics"]["final_score"] == recommendations[0]["final_score"]
 
 
 def test_strategy_scenarios_and_market_landscape_use_real_artifacts() -> None:

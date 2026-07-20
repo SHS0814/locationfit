@@ -7,13 +7,15 @@ import type {
   FounderContext,
   RecommendationDraft,
   RecommendationItem,
+  RecommendationReport,
   RecommendationRequest,
   RelaxationOption,
   StrategyScenario,
   TradeoffInsight,
 } from '../../types/api'
 
-export const AGENT_SESSION_KEY = 'kb-location-agent-session-v2'
+export const AGENT_SESSION_KEY = 'kb-location-agent-session-v3'
+export const AGENT_V2_SESSION_KEY = 'kb-location-agent-session-v2'
 export const AGENT_LEGACY_SESSION_KEY = 'kb-location-agent-session-v1'
 
 export const emptyDraft: RecommendationDraft = {
@@ -58,7 +60,7 @@ export const initialMessages: AgentMessage[] = [{
 }]
 
 export interface AgentSession {
-  schemaVersion: 2
+  schemaVersion: 3
   history: AgentMessage[]
   draft: RecommendationDraft
   phase: AgentPhase
@@ -73,11 +75,12 @@ export interface AgentSession {
   analysisRevision: number
   items: RecommendationItem[]
   comparison: AreaComparison[]
+  recommendationReport: RecommendationReport | null
   activeRequest: RecommendationRequest | null
 }
 
 export const initialSession: AgentSession = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   history: initialMessages,
   draft: emptyDraft,
   phase: 'discovering',
@@ -92,6 +95,7 @@ export const initialSession: AgentSession = {
   analysisRevision: 0,
   items: [],
   comparison: [],
+  recommendationReport: null,
   activeRequest: null,
 }
 
@@ -121,7 +125,7 @@ export function restoreSession(raw: string | null): AgentSession {
     const parsed = JSON.parse(raw) as Partial<AgentSession>
     if (!Array.isArray(parsed.history) || !parsed.draft || !parsed.phase) return initialSession
     return {
-      schemaVersion: 2,
+      schemaVersion: 3,
       history: parsed.history.slice(-20),
       draft: { ...emptyDraft, ...parsed.draft },
       phase: parsed.phase === ('gathering' as AgentPhase) ? 'discovering' : parsed.phase,
@@ -136,6 +140,7 @@ export function restoreSession(raw: string | null): AgentSession {
       analysisRevision: Number(parsed.analysisRevision || 0),
       items: Array.isArray(parsed.items) ? parsed.items : [],
       comparison: Array.isArray(parsed.comparison) ? parsed.comparison : [],
+      recommendationReport: parsed.recommendationReport || null,
       activeRequest: parsed.activeRequest || null,
     }
   } catch {

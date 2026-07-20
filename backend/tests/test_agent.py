@@ -131,6 +131,10 @@ def test_confirm_action_returns_deterministic_recommendations() -> None:
 
     assert result["phase"] == "results"
     assert len(result["recommendations"]) == 3
+    assert result["recommendation_report"] is not None
+    assert len(result["recommendation_report"]["areas"]) == 3
+    assert result["recommendations"][0]["area_name"] in result["assistant_message"]
+    assert "중앙값" in result["assistant_message"]
     assert runner.actions == ["confirm_recommendation"]
 
 
@@ -151,6 +155,20 @@ def test_agent_api_contract_with_injected_runner() -> None:
         assert body["draft"]["industry_code"] == "CS100001"
         assert len(body["scenarios"]) == 3
         assert body["request_id"] == response.headers["x-request-id"]
+
+        confirm_response = client.post("/api/v1/agent/turns", json={
+            "action": "confirm_recommendation",
+            "message": "이 조건으로 분석해주세요.",
+            "draft": {
+                "industry_code": "CS100001",
+                "preferred_districts": ["강남구"],
+                "top_n": 3,
+            },
+        })
+        assert confirm_response.status_code == 200
+        confirm_body = confirm_response.json()
+        assert len(confirm_body["recommendation_report"]["areas"]) == 3
+        assert confirm_body["recommendation_report"]["candidate_count"] > 0
 
 
 def test_select_scenario_requires_confirmation_before_final_result() -> None:

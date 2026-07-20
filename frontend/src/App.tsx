@@ -5,18 +5,22 @@ import { AgentPanel } from './features/agent/AgentPanel'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
+  AGENT_V2_SESSION_KEY,
   draftToRequest,
   isDraftReady,
   restoreSession,
   type AgentSession,
 } from './features/agent/model'
 import { RecommendationResults } from './features/recommendation/RecommendationResults'
+import { RecommendationReportView } from './features/recommendation/RecommendationReport'
 import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption } from './types/api'
 
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
-    sessionStorage.getItem(AGENT_SESSION_KEY) || sessionStorage.getItem(AGENT_LEGACY_SESSION_KEY),
+    sessionStorage.getItem(AGENT_SESSION_KEY)
+      || sessionStorage.getItem(AGENT_V2_SESSION_KEY)
+      || sessionStorage.getItem(AGENT_LEGACY_SESSION_KEY),
   ))
   const [selected, setSelected] = useState<RecommendationItem | null>(() => session.items[0] || null)
   const [loading, setLoading] = useState(false)
@@ -49,7 +53,7 @@ export default function App() {
         ? draftToRequest(response.draft)
         : keepActiveResults ? session.activeRequest : null
       const nextSession: AgentSession = {
-        schemaVersion: 2,
+        schemaVersion: 3,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
         draft: response.draft,
         phase: response.phase,
@@ -66,6 +70,8 @@ export default function App() {
         comparison: response.comparison.length
           ? response.comparison
           : keepActiveResults ? session.comparison : [],
+        recommendationReport: response.recommendation_report
+          || (keepActiveResults ? session.recommendationReport : null),
         activeRequest,
       }
       setSession(nextSession)
@@ -132,7 +138,7 @@ export default function App() {
           : current.context
       return {
         ...current, assumptions, draft, context, phase: 'discovering', scenarios: [], tradeoffs: [],
-        relaxationOptions: [], selectedScenarioId: null, items: [], comparison: [], activeRequest: null,
+        relaxationOptions: [], selectedScenarioId: null, items: [], comparison: [], recommendationReport: null, activeRequest: null,
       }
     })
   }
@@ -167,6 +173,7 @@ export default function App() {
       selectedScenarioId: null,
       items: [],
       comparison: [],
+      recommendationReport: null,
       activeRequest: null,
     }))
   }
@@ -220,6 +227,7 @@ export default function App() {
               <>
                 <RecommendationMap items={session.items} selected={selected} onSelect={setSelected} />
                 <RecommendationResults items={session.items} selectedCode={selected?.area_code || null} onSelect={setSelected} />
+                {session.recommendationReport && <RecommendationReportView report={session.recommendationReport} />}
               </>
             ) : (
               <div className="empty-state">

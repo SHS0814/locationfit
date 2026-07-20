@@ -35,4 +35,5 @@ async def agent_turn(
         recommendations=result["recommendations"],
         diagnostics=result["diagnostics"],
         comparison=result["comparison"],
+        recommendation_report=result["recommendation_report"],
     )

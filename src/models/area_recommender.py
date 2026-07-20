@@ -91,6 +91,18 @@ IMPORTANCE_FEATURES: dict[str, list[str]] = {
     "culture_facility_importance": ["log_culture_facility_density"],
 }
 IMPORTANCE_FIELDS = list(IMPORTANCE_FEATURES)
+IMPORTANCE_LABELS = {
+    "weekend_importance": "주말 유동인구",
+    "floating_population_importance": "유동인구 밀도",
+    "resident_population_importance": "상주인구 밀도",
+    "worker_population_importance": "직장인구 밀도",
+    "apartment_importance": "아파트 배후 규모",
+    "transport_facility_importance": "교통시설 접근성",
+    "education_facility_importance": "교육시설 접근성",
+    "medical_facility_importance": "의료시설 접근성",
+    "shopping_facility_importance": "쇼핑시설 접근성",
+    "culture_facility_importance": "문화시설 접근성",
+}
 
 
 @dataclass(frozen=True)
@@ -138,6 +150,7 @@ class RecommendationResult:
 
     recommendations: pd.DataFrame
     candidates: pd.DataFrame
+    eligible_candidates: pd.DataFrame
     diagnostics: dict[str, Any]
     preference_features: tuple[PreferenceFeature, ...]
 
@@ -198,21 +211,30 @@ def build_preference_features(request: RecommendationRequest, available_columns:
     mappings: list[PreferenceFeature] = []
     if request.target_gender:
         feature = f"{request.target_gender}_floating_ratio"
-        mappings.append(PreferenceFeature("target_gender", feature, 1.0, "high", f"{request.target_gender} 유동인구 비율"))
+        gender_label = {"male": "남성", "female": "여성"}[request.target_gender]
+        mappings.append(PreferenceFeature("target_gender", feature, 1.0, "high", f"{gender_label} 유동인구 비율"))
     if request.target_age_groups:
         weight = 1.0 / len(request.target_age_groups)
         for value in request.target_age_groups:
-            mappings.append(PreferenceFeature("target_age_groups", AGE_FEATURES[value], weight, "high", f"{value} 연령 유동인구 비율"))
+            age_label = "60대 이상" if value == "60_plus" else f"{value}대"
+            mappings.append(PreferenceFeature("target_age_groups", AGE_FEATURES[value], weight, "high", f"{age_label} 유동인구 비율"))
     if request.preferred_time_bands:
         weight = 1.0 / len(request.preferred_time_bands)
         for value in request.preferred_time_bands:
-            mappings.append(PreferenceFeature("preferred_time_bands", TIME_FEATURES[value], weight, "high", f"{value} 시간대 유동인구 비율"))
+            time_label = value.replace("_", "~") + "시"
+            mappings.append(PreferenceFeature("preferred_time_bands", TIME_FEATURES[value], weight, "high", f"{time_label} 유동인구 비율"))
     for input_field, features in IMPORTANCE_FEATURES.items():
         importance = float(getattr(request, input_field))
         if importance <= 0:
             continue
         for feature in features:
-            mappings.append(PreferenceFeature(input_field, feature, importance / len(features), "high", input_field.removesuffix("_importance")))
+            mappings.append(PreferenceFeature(
+                input_field,
+                feature,
+                importance / len(features),
+                "high",
+                IMPORTANCE_LABELS[input_field],
+            ))
     if request.store_density_preference:
         mappings.append(PreferenceFeature("store_density_preference", "log_store_density", 1.0, request.store_density_preference, "전체 점포 밀도"))
     if request.franchise_preference:
@@ -550,20 +572,30 @@ class AreaRecommender:
         industry_scored = score_industry_evidence(industry_raw, strategy=request.strategy)
         d_count = int(industry_scored["reliability_grade"].eq("D").sum())
         stale_count = int(industry_scored["stale_observation_flag"].eq(1).sum())
-        candidates = structural.merge(industry_scored, on="area_code", how="inner", suffixes=("", "_evidence"), validate="one_to_one")
-        candidates = candidates.loc[
-            candidates["reliability_grade"].ne("D")
-            & candidates["stale_observation_flag"].eq(0)
-            & candidates["data_reliability_evidence"].ge(request.min_data_reliability)
+        eligible_candidates = structural.merge(
+            industry_scored,
+            on="area_code",
+            how="inner",
+            suffixes=("", "_evidence"),
+            validate="one_to_one",
+        )
+        eligible_candidates = eligible_candidates.loc[
+            eligible_candidates["reliability_grade"].ne("D")
+            & eligible_candidates["stale_observation_flag"].eq(0)
+            & eligible_candidates["data_reliability_evidence"].ge(request.min_data_reliability)
         ].copy()
-        candidates = candidates.sort_values(["condition_fit_score", "area_code"], ascending=[False, True]).head(k).copy()
-        if candidates.empty:
+        if eligible_candidates.empty:
             raise ValueError("필터와 신뢰도 조건을 만족하는 추천 후보가 없습니다.")
         final_weights = STRATEGY_FINAL_WEIGHTS[request.strategy]
-        candidates["final_score"] = (
-            final_weights["condition_fit_score"] * candidates["condition_fit_score"]
-            + final_weights["reliability_adjusted_evidence_score"] * candidates["reliability_adjusted_evidence_score"]
+        eligible_candidates["final_score"] = (
+            final_weights["condition_fit_score"] * eligible_candidates["condition_fit_score"]
+            + final_weights["reliability_adjusted_evidence_score"]
+            * eligible_candidates["reliability_adjusted_evidence_score"]
         ).clip(0, 100)
+        eligible_candidates["data_reliability"] = eligible_candidates["data_reliability_evidence"]
+        candidates = eligible_candidates.sort_values(
+            ["condition_fit_score", "area_code"], ascending=[False, True]
+        ).head(k).copy()
         candidates = candidates.sort_values(["final_score", "condition_fit_score", "area_code"], ascending=[False, False, True]).reset_index(drop=True)
         candidates["rank"] = np.arange(1, len(candidates) + 1)
         contribution_lookup: dict[str, dict[str, float]] = {}
@@ -613,7 +645,13 @@ class AreaRecommender:
             "final_weights": final_weights,
             "evidence_group_weights": STRATEGY_GROUP_WEIGHTS[request.strategy],
         }
-        return RecommendationResult(recommendations, candidates, diagnostics, preferences)
+        return RecommendationResult(
+            recommendations,
+            candidates,
+            eligible_candidates.reset_index(drop=True),
+            diagnostics,
+            preferences,
+        )
 
 
 def _json_number(value: Any) -> float | None:

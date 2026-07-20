@@ -167,6 +167,44 @@ export interface AreaComparison {
   reliability_grade: string | null
 }
 
+export interface RecommendationReportMetrics {
+  final_score: number | null
+  condition_fit_score: number | null
+  reliability_adjusted_evidence_score: number | null
+  recent_4q_average_sales: number | null
+  recent_4q_growth_rate: number | null
+  competition_intensity: number | null
+  closing_rate: number | null
+  floating_population: number | null
+  resident_population: number | null
+  worker_population: number | null
+  data_reliability: number | null
+}
+
+export type RecommendationReportMetricKey = keyof RecommendationReportMetrics
+
+export interface RecommendationReportArea {
+  rank: number
+  area_code: string
+  area_name: string
+  district_name: string
+  area_type: string
+  reliability_grade: string
+  metrics: RecommendationReportMetrics
+  benchmark_delta: RecommendationReportMetrics
+  positive_reasons: FitReason[]
+  negative_reasons: FitReason[]
+  warnings: string[]
+}
+
+export interface RecommendationReport {
+  candidate_count: number
+  benchmark_label: string
+  data_period: Record<string, string>
+  benchmark: RecommendationReportMetrics
+  areas: RecommendationReportArea[]
+}
+
 export interface AgentTurnRequest {
   action: 'message' | 'select_scenario' | 'confirm_recommendation'
   message: string
@@ -200,4 +238,5 @@ export interface AgentTurnResponse {
   recommendations: RecommendationItem[]
   diagnostics: Record<string, unknown>
   comparison: AreaComparison[]
+  recommendation_report: RecommendationReport | null
 }

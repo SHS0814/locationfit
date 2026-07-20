@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.schemas.recommendation import RecommendationItem, RecommendationRequestSchema
+from backend.app.schemas.recommendation import FitReason, RecommendationItem, RecommendationRequestSchema
 
 
 class AgentMessage(BaseModel):
@@ -176,6 +176,48 @@ class AreaComparison(BaseModel):
     reliability_grade: str | None = None
 
 
+class RecommendationReportMetrics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    final_score: float | None = None
+    condition_fit_score: float | None = None
+    reliability_adjusted_evidence_score: float | None = None
+    recent_4q_average_sales: float | None = None
+    recent_4q_growth_rate: float | None = None
+    competition_intensity: float | None = None
+    closing_rate: float | None = None
+    floating_population: float | None = None
+    resident_population: float | None = None
+    worker_population: float | None = None
+    data_reliability: float | None = None
+
+
+class RecommendationReportArea(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rank: int
+    area_code: str
+    area_name: str
+    district_name: str
+    area_type: str
+    reliability_grade: str
+    metrics: RecommendationReportMetrics
+    benchmark_delta: RecommendationReportMetrics
+    positive_reasons: list[FitReason] = Field(default_factory=list)
+    negative_reasons: list[FitReason] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RecommendationReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_count: int
+    benchmark_label: str
+    data_period: dict[str, str]
+    benchmark: RecommendationReportMetrics
+    areas: list[RecommendationReportArea]
+
+
 class AgentTurnResponse(BaseModel):
     request_id: str
     artifact_version: str
@@ -196,3 +238,4 @@ class AgentTurnResponse(BaseModel):
     recommendations: list[RecommendationItem] = Field(default_factory=list)
     diagnostics: dict[str, object] = Field(default_factory=dict)
     comparison: list[AreaComparison] = Field(default_factory=list)
+    recommendation_report: RecommendationReport | None = None
