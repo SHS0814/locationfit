@@ -63,6 +63,7 @@ SYSTEM_INSTRUCTIONS = """
 6. recommend_confirmed_areas는 확인 액션에서 제공될 때 정확히 한 번 호출한다. 도구가 없으면 추천을 실행했다고 말하지 않는다.
 7. 추천 결과가 있을 때 순위나 이름으로 비교를 요청받으면 compare_recommended_areas를 호출한다.
 8. 모든 점수와 수치는 도구 결과만 사용한다. 점수, 매출, 인구, 시세를 추측하거나 재계산하지 않는다.
+8-1. 사용자에게 경쟁을 설명할 때 competition_intensity 점수를 노출하지 않고 recent_store_count와 same_industry_store_density 실제 수치만 사용한다.
 9. apartment_average_market_price는 주거용 아파트 평균 시세 참고치다. 상가 임대료·보증금·매매가로 표현하지 않는다.
 10. 미래 매출이나 성공을 보장하지 않는다. 데이터 기간과 신뢰도 한계를 짧고 명확하게 알린다.
 11. 응답은 쉬운 한국어 2~5문장으로 작성하고 한 번에 여러 질문을 하지 않는다. 최종 추천에서는 도구가 제공한 상권명과 수치를 사용해 1위의 이유와 2·3위의 차이를 설명한다.
@@ -554,16 +555,23 @@ class LocationAgentService:
                 f"성장률 {float(growth) * 100:.1f}%"
                 f"(중앙값 대비 {(float(growth) - float(benchmark_growth)) * 100:+.1f}%p)"
             )
-        competition = metrics.get("competition_intensity")
-        benchmark_competition = benchmark.get("competition_intensity")
-        if competition is not None and benchmark_competition is not None:
+        store_count = metrics.get("recent_store_count")
+        benchmark_store_count = benchmark.get("recent_store_count")
+        store_density = metrics.get("same_industry_store_density")
+        benchmark_store_density = benchmark.get("same_industry_store_density")
+        if store_count is not None and benchmark_store_count is not None:
             comparisons.append(
-                f"경쟁강도 {float(competition) * 100:.1f}"
-                f"(중앙값 대비 {(float(competition) - float(benchmark_competition)) * 100:+.1f}점)"
+                f"{report.get('competition_reference_period', '최근 관측 분기')} 동종업종 점포 {float(store_count):,.0f}개"
+                f"(중앙값 {float(benchmark_store_count):,.1f}개)"
+            )
+        if store_density is not None and benchmark_store_density is not None:
+            comparisons.append(
+                f"점포 밀도 {float(store_density):,.1f}개/㎢"
+                f"(중앙값 {float(benchmark_store_density):,.1f}개/㎢)"
             )
         comparison_sentence = (
             f"동일 조건 후보 {int(report['candidate_count'])}곳의 중앙값과 비교하면 "
-            + ", ".join(comparisons[:3])
+            + ", ".join(comparisons[:4])
             + "입니다."
             if comparisons else
             f"동일 조건 후보 {int(report['candidate_count'])}곳과 비교한 상세 수치는 아래 보고서에 정리했습니다."

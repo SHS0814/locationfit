@@ -160,6 +160,8 @@ export interface AreaComparison {
   culture_facility_count: number | null
   apartment_average_market_price: number | null
   competition_intensity: number | null
+  recent_store_count: number | null
+  same_industry_store_density: number | null
   recent_4q_average_sales: number | null
   recent_4q_growth_rate: number | null
   closing_rate: number | null
@@ -173,7 +175,8 @@ export interface RecommendationReportMetrics {
   reliability_adjusted_evidence_score: number | null
   recent_4q_average_sales: number | null
   recent_4q_growth_rate: number | null
-  competition_intensity: number | null
+  recent_store_count: number | null
+  same_industry_store_density: number | null
   closing_rate: number | null
   floating_population: number | null
   resident_population: number | null
@@ -201,6 +204,7 @@ export interface RecommendationReport {
   candidate_count: number
   benchmark_label: string
   data_period: Record<string, string>
+  competition_reference_period: string
   benchmark: RecommendationReportMetrics
   areas: RecommendationReportArea[]
 }

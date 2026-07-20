@@ -169,6 +169,8 @@ class AreaComparison(BaseModel):
     culture_facility_count: float | None = None
     apartment_average_market_price: float | None = None
     competition_intensity: float | None = None
+    recent_store_count: float | None = None
+    same_industry_store_density: float | None = None
     recent_4q_average_sales: float | None = None
     recent_4q_growth_rate: float | None = None
     closing_rate: float | None = None
@@ -184,7 +186,8 @@ class RecommendationReportMetrics(BaseModel):
     reliability_adjusted_evidence_score: float | None = None
     recent_4q_average_sales: float | None = None
     recent_4q_growth_rate: float | None = None
-    competition_intensity: float | None = None
+    recent_store_count: float | None = None
+    same_industry_store_density: float | None = None
     closing_rate: float | None = None
     floating_population: float | None = None
     resident_population: float | None = None
@@ -214,6 +217,7 @@ class RecommendationReport(BaseModel):
     candidate_count: int
     benchmark_label: str
     data_period: dict[str, str]
+    competition_reference_period: str
     benchmark: RecommendationReportMetrics
     areas: list[RecommendationReportArea]
 

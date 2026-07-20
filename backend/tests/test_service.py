@@ -47,7 +47,25 @@ def test_recommendation_report_compares_top_three_with_full_eligible_median() ->
     assert report["benchmark"]["recent_4q_average_sales"] == pytest.approx(
         engine_result.eligible_candidates["recent_4q_average_sales"].median()
     )
+    assert report["benchmark"]["recent_store_count"] == pytest.approx(
+        engine_result.eligible_candidates["recent_store_count"].median()
+    )
+    assert report["benchmark"]["same_industry_store_density"] == pytest.approx(
+        engine_result.eligible_candidates["same_industry_store_density"].median()
+    )
     assert report["areas"][0]["metrics"]["final_score"] == recommendations[0]["final_score"]
+    source = engine_result.eligible_candidates.set_index("area_code").loc[recommendations[0]["area_code"]]
+    assert report["areas"][0]["metrics"]["recent_store_count"] == source["recent_store_count"]
+    assert report["areas"][0]["metrics"]["same_industry_store_density"] == pytest.approx(
+        source["same_industry_store_density"]
+    )
+    assert "competition_intensity" not in report["areas"][0]["metrics"]
+    assert report["competition_reference_period"] == "2025Q4"
+
+    repeated, repeated_diagnostics = service.recommend(request)
+    assert [item["area_code"] for item in repeated] == [item["area_code"] for item in recommendations]
+    assert [item["final_score"] for item in repeated] == [item["final_score"] for item in recommendations]
+    assert repeated_diagnostics == diagnostics
 
 
 def test_strategy_scenarios_and_market_landscape_use_real_artifacts() -> None:

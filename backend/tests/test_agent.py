@@ -135,6 +135,9 @@ def test_confirm_action_returns_deterministic_recommendations() -> None:
     assert len(result["recommendation_report"]["areas"]) == 3
     assert result["recommendations"][0]["area_name"] in result["assistant_message"]
     assert "중앙값" in result["assistant_message"]
+    assert "동종업종 점포" in result["assistant_message"]
+    assert "점포 밀도" in result["assistant_message"]
+    assert "경쟁강도" not in result["assistant_message"]
     assert runner.actions == ["confirm_recommendation"]
 
 
@@ -169,6 +172,9 @@ def test_agent_api_contract_with_injected_runner() -> None:
         confirm_body = confirm_response.json()
         assert len(confirm_body["recommendation_report"]["areas"]) == 3
         assert confirm_body["recommendation_report"]["candidate_count"] > 0
+        assert confirm_body["recommendation_report"]["competition_reference_period"] == "2025Q4"
+        assert confirm_body["recommendation_report"]["areas"][0]["metrics"]["recent_store_count"] is not None
+        assert confirm_body["recommendation_report"]["areas"][0]["metrics"]["same_industry_store_density"] is not None
 
 
 def test_select_scenario_requires_confirmation_before_final_result() -> None:
@@ -235,6 +241,8 @@ def test_compare_is_limited_to_current_recommendations() -> None:
         items[0]["area_code"], items[1]["area_code"],
     ]
     assert comparison[0]["apartment_average_market_price"] is not None
+    assert comparison[0]["recent_store_count"] is not None
+    assert comparison[0]["same_industry_store_density"] is not None
 
     with pytest.raises(ValueError, match="현재 추천 결과"):
         recommender.compare(["not-a-result"], request.industry_code, allowed_area_codes=allowed)

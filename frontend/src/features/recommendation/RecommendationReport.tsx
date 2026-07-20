@@ -11,7 +11,8 @@ interface Props {
 const metricRows: Array<{ key: RecommendationReportMetricKey; label: string; note: string }> = [
   { key: 'recent_4q_average_sales', label: '최근 4분기 평균 매출', note: '분기 평균 관측 매출' },
   { key: 'recent_4q_growth_rate', label: '최근 4분기 성장률', note: '직전 4분기 대비' },
-  { key: 'competition_intensity', label: '경쟁강도', note: '높을수록 경쟁이 강함' },
+  { key: 'recent_store_count', label: '동종업종 점포 수', note: '최신 관측 분기 실제 점포' },
+  { key: 'same_industry_store_density', label: '동종업종 점포 밀도', note: '상권 면적 1㎢당 점포' },
   { key: 'closing_rate', label: '폐업률', note: '낮을수록 안정적' },
   { key: 'floating_population', label: '유동인구', note: '최근 4분기 평균' },
   { key: 'resident_population', label: '상주인구', note: '최근 4분기 평균' },
@@ -93,7 +94,7 @@ export function RecommendationReportView({ report }: Props) {
         </div>
       )}
       <footer className="report-footnote">
-        구조 지표 {report.data_period.profile || '-'} · 업종 과거 성과 {report.data_period.performance || '-'} · 관측 데이터 기반이며 미래 매출을 보장하지 않습니다.
+        경쟁 점포 {report.competition_reference_period} 기준 · 구조 지표 {report.data_period.profile || '-'} · 업종 과거 성과 {report.data_period.performance || '-'} · 관측 데이터 기반이며 미래 매출을 보장하지 않습니다.
       </footer>
     </section>
   )

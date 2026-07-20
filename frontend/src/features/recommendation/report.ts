@@ -21,7 +21,8 @@ export function formatReportValue(metric: RecommendationReportMetricKey, value: 
   if (scoreMetrics.has(metric)) return `${value.toFixed(1)}점`
   if (metric === 'recent_4q_average_sales') return `${Math.round(value).toLocaleString('ko-KR')}원`
   if (percentMetrics.has(metric)) return `${(value * 100).toFixed(1)}%`
-  if (metric === 'competition_intensity') return `${(value * 100).toFixed(1)} / 100`
+  if (metric === 'recent_store_count') return `${Math.round(value).toLocaleString('ko-KR')}개`
+  if (metric === 'same_industry_store_density') return `${value.toLocaleString('ko-KR', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}개/㎢`
   if (populationMetrics.has(metric)) return `${Math.round(value).toLocaleString('ko-KR')}명`
   return value.toLocaleString('ko-KR')
 }
@@ -34,15 +35,18 @@ export function formatBenchmarkDelta(
   if (value == null || benchmark == null || !Number.isFinite(value) || !Number.isFinite(benchmark)) return '비교 불가'
   const delta = value - benchmark
   if (Math.abs(delta) < 1e-12) return '중앙값과 같음'
-  if (scoreMetrics.has(metric) || metric === 'competition_intensity') {
-    const scaled = metric === 'competition_intensity' ? delta * 100 : delta
-    return `중앙값 대비 ${scaled >= 0 ? '+' : ''}${scaled.toFixed(1)}점`
+  if (scoreMetrics.has(metric)) {
+    return `중앙값 대비 ${delta >= 0 ? '+' : ''}${delta.toFixed(1)}점`
   }
   if (percentMetrics.has(metric)) {
     const points = delta * 100
     return `중앙값 대비 ${points >= 0 ? '+' : ''}${points.toFixed(1)}%p`
   }
-  if (benchmark === 0) return '중앙값 대비 계산 불가'
+  if (benchmark === 0) {
+    if (metric === 'recent_store_count') return `중앙값 대비 ${delta >= 0 ? '+' : ''}${Math.round(delta)}개`
+    if (metric === 'same_industry_store_density') return `중앙값 대비 ${delta >= 0 ? '+' : ''}${delta.toFixed(1)}개/㎢`
+    return '중앙값 대비 계산 불가'
+  }
   const relative = delta / Math.abs(benchmark) * 100
   return `중앙값 대비 ${relative >= 0 ? '+' : ''}${relative.toFixed(1)}%`
 }

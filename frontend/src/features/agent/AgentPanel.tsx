@@ -248,6 +248,7 @@ export function AgentPanel({
             <div key={area.area_code}>
               <strong>{area.area_name}</strong>
               <span>유동 {formatNumber(area.floating_population)} · 직장 {formatNumber(area.worker_population)}</span>
+              <span>동종업종 점포 {formatStoreCount(area.recent_store_count)} · 밀도 {formatStoreDensity(area.same_industry_store_density)}</span>
               <span>최근 성장률 {formatPercent(area.recent_4q_growth_rate)} · 신뢰도 {area.reliability_grade || '-'}</span>
             </div>
           ))}
@@ -275,4 +276,12 @@ function formatNumber(value: number | null): string {
 
 function formatPercent(value: number | null): string {
   return value == null ? '-' : `${(value * 100).toFixed(1)}%`
+}
+
+function formatStoreCount(value: number | null): string {
+  return value == null ? '-' : `${Math.round(value).toLocaleString('ko-KR')}개`
+}
+
+function formatStoreDensity(value: number | null): string {
+  return value == null ? '-' : `${value.toLocaleString('ko-KR', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}개/㎢`
 }

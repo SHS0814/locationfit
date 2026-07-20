@@ -30,7 +30,8 @@ REPORT_METRICS = (
     "reliability_adjusted_evidence_score",
     "recent_4q_average_sales",
     "recent_4q_growth_rate",
-    "competition_intensity",
+    "recent_store_count",
+    "same_industry_store_density",
     "closing_rate",
     "floating_population",
     "resident_population",
@@ -200,10 +201,14 @@ class RecommenderService:
                 "warnings": item["warnings"],
             }))
 
+        data_period = self.manifest.get("data_period", {})
+        performance_period = str(data_period.get("performance", ""))
+        competition_reference_period = performance_period.rsplit("~", 1)[-1] or "최근 관측 분기"
         return {
             "candidate_count": len(eligible),
             "benchmark_label": "동일 조건 전체 후보 중앙값",
-            "data_period": self.manifest.get("data_period", {}),
+            "data_period": data_period,
+            "competition_reference_period": competition_reference_period,
             "benchmark": benchmark,
             "areas": areas,
         }
@@ -405,7 +410,8 @@ class RecommenderService:
             "apartment_average_market_price", "data_reliability",
         ]
         evidence_columns = [
-            "area_code", "competition_intensity", "recent_4q_average_sales",
+            "area_code", "competition_intensity", "recent_store_count",
+            "same_industry_store_density", "recent_4q_average_sales",
             "recent_4q_growth_rate", "closing_rate", "data_reliability", "reliability_grade",
         ]
         profile = self.index.loc[self.index["area_code"].astype(str).isin(requested), profile_columns].copy()
@@ -439,6 +445,8 @@ class RecommenderService:
                 "culture_facility_count": row.get("culture_facility_count"),
                 "apartment_average_market_price": row.get("apartment_average_market_price"),
                 "competition_intensity": row.get("competition_intensity"),
+                "recent_store_count": row.get("recent_store_count"),
+                "same_industry_store_density": row.get("same_industry_store_density"),
                 "recent_4q_average_sales": row.get("recent_4q_average_sales"),
                 "recent_4q_growth_rate": row.get("recent_4q_growth_rate"),
                 "closing_rate": row.get("closing_rate"),
