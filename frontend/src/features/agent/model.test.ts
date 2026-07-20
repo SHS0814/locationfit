@@ -23,10 +23,23 @@ describe('agent session model', () => {
       activeRequest: draftToRequest(draft),
     }))
     expect(restored.draft.industry_code).toBe('CS100001')
-    expect(restored.schemaVersion).toBe(4)
+    expect(restored.schemaVersion).toBe(5)
     expect(restored.recommendationReport).toBeNull()
     expect(restored.context.discovery_question_count).toBe(0)
     expect(restoreSession('{broken').phase).toBe('discovering')
+  })
+
+  it('drops cached recommendation items that predate map boundaries', () => {
+    const draft = { ...emptyDraft, industry_code: 'CS100001', target_age_groups: ['20'] }
+    const restored = restoreSession(JSON.stringify({
+      history: [{ role: 'user', content: '카페를 열고 싶어요' }],
+      draft,
+      phase: 'results',
+      items: [{ area_code: '3110001', area_name: '오래된 결과' }],
+      activeRequest: draftToRequest(draft),
+    }))
+    expect(restored.items).toEqual([])
+    expect(restored.activeRequest?.industry_code).toBe('CS100001')
   })
 
   it('does not treat a strategy selection as a location preference', () => {

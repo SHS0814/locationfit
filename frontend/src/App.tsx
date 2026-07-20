@@ -5,10 +5,12 @@ import { AgentPanel } from './features/agent/AgentPanel'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
+  AGENT_V4_SESSION_KEY,
   AGENT_V2_SESSION_KEY,
   AGENT_V3_SESSION_KEY,
   draftToRequest,
   initialSession,
+  hasAreaBoundary,
   isDraftReady,
   restoreSession,
   type AgentSession,
@@ -22,6 +24,7 @@ export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)
+      || sessionStorage.getItem(AGENT_V4_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V3_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V2_SESSION_KEY)
       || sessionStorage.getItem(AGENT_LEGACY_SESSION_KEY),
@@ -30,6 +33,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastTurn, setLastTurn] = useState<AgentTurnRequest | null>(null)
+  const recommendationItemsReady = session.items.length > 0 && session.items.every(hasAreaBoundary)
 
   useEffect(() => {
     api.metadata().then(setMetadata).catch((reason: Error) => setError(reason.message))
@@ -38,6 +42,29 @@ export default function App() {
   useEffect(() => {
     sessionStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(session))
   }, [session])
+
+  useEffect(() => {
+    if (!metadata || session.phase !== 'results' || recommendationItemsReady || !session.activeRequest) return
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    api.recommend(session.activeRequest)
+      .then((response) => {
+        if (cancelled) return
+        if (!response.recommendations.every(hasAreaBoundary)) {
+          throw new Error('상권 경계 데이터를 받지 못했습니다. API 서버를 재시작해주세요.')
+        }
+        setSession((current) => ({ ...current, items: response.recommendations }))
+        setSelected(response.recommendations[0] || null)
+      })
+      .catch((reason: Error) => {
+        if (!cancelled) setError(reason.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [metadata, recommendationItemsReady, session.activeRequest, session.phase])
 
   const executeTurn = async (payload: AgentTurnRequest, showUserMessage: boolean) => {
     const visibleHistory = showUserMessage
@@ -49,6 +76,9 @@ export default function App() {
     setLastTurn(payload)
     try {
       const response = await api.agentTurn(payload)
+      if (response.recommendations.length && !response.recommendations.every(hasAreaBoundary)) {
+        throw new Error('상권 경계 데이터를 받지 못했습니다. API 서버를 재시작해주세요.')
+      }
       const keepActiveResults = response.phase === 'results'
       const items = response.recommendations.length
         ? response.recommendations
@@ -57,7 +87,7 @@ export default function App() {
         ? draftToRequest(response.draft)
         : keepActiveResults ? session.activeRequest : null
       const nextSession: AgentSession = {
-        schemaVersion: 4,
+        schemaVersion: 5,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
         draft: response.draft,
         phase: response.phase,
@@ -185,6 +215,7 @@ export default function App() {
   const resetConversationAndAnalysis = () => {
     if (!window.confirm('대화와 모든 분석 결과를 초기화할까요?')) return
     sessionStorage.removeItem(AGENT_SESSION_KEY)
+    sessionStorage.removeItem(AGENT_V4_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V3_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V2_SESSION_KEY)
     sessionStorage.removeItem(AGENT_LEGACY_SESSION_KEY)
@@ -245,7 +276,7 @@ export default function App() {
           />
           <div className="output-area">
             {error && <div className="error-banner" role="alert">{error} {lastTurn && <button type="button" onClick={() => executeTurn(lastTurn, false)}>다시 시도</button>}</div>}
-            {session.items.length ? (
+            {recommendationItemsReady ? (
               <>
                 <RecommendationMap items={session.items} selected={selected} onSelect={setSelected} />
                 <RecommendationResults items={session.items} selectedCode={selected?.area_code || null} onSelect={setSelected} />
@@ -260,8 +291,8 @@ export default function App() {
             ) : (
               <div className="empty-state">
                 <div className="compass">⌖</div>
-                <h2>AI와 조건을 정리하면 추천 지도가 열립니다</h2>
-                <p>왼쪽 대화창에 업종과 원하는 입지를 편하게 설명해보세요.</p>
+                <h2>{loading && session.phase === 'results' ? '상권 경계를 불러오는 중입니다' : 'AI와 조건을 정리하면 추천 지도가 열립니다'}</h2>
+                <p>{loading && session.phase === 'results' ? '기존 추천 결과에 실제 면적 데이터를 연결하고 있습니다.' : '왼쪽 대화창에 업종과 원하는 입지를 편하게 설명해보세요.'}</p>
               </div>
             )}
           </div>

@@ -26,6 +26,9 @@ def test_metadata_and_recommendation_with_real_artifacts() -> None:
     assert diagnostics["returned"] == 5
     assert all(37.0 < item["latitude"] < 38.0 for item in recommendations)
     assert all(126.0 < item["longitude"] < 128.0 for item in recommendations)
+    assert all(item["area_size_sqm"] > 0 for item in recommendations)
+    assert all(item["boundary"]["type"] in {"Polygon", "MultiPolygon"} for item in recommendations)
+    assert all(item["boundary"]["coordinates"] for item in recommendations)
     assert isinstance(recommendations[0]["positive_reasons"], list)
 
 

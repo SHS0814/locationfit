@@ -57,6 +57,11 @@ class FitReason(BaseModel):
     weight: float
 
 
+class AreaBoundary(BaseModel):
+    type: Literal["Polygon", "MultiPolygon"]
+    coordinates: list[Any]
+
+
 class RecommendationItem(BaseModel):
     rank: int
     area_code: str
@@ -68,6 +73,8 @@ class RecommendationItem(BaseModel):
     industry_name: str
     latitude: float
     longitude: float
+    area_size_sqm: float
+    boundary: AreaBoundary
     final_score: float
     base_final_score: float | None = None
     budget_fit_score: float | None = None

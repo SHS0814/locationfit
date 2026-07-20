@@ -14,7 +14,8 @@ import type {
   TradeoffInsight,
 } from '../../types/api'
 
-export const AGENT_SESSION_KEY = 'kb-location-agent-session-v4'
+export const AGENT_SESSION_KEY = 'kb-location-agent-session-v5'
+export const AGENT_V4_SESSION_KEY = 'kb-location-agent-session-v4'
 export const AGENT_V3_SESSION_KEY = 'kb-location-agent-session-v3'
 export const AGENT_V2_SESSION_KEY = 'kb-location-agent-session-v2'
 export const AGENT_LEGACY_SESSION_KEY = 'kb-location-agent-session-v1'
@@ -66,7 +67,7 @@ export const initialMessages: AgentMessage[] = [{
 }]
 
 export interface AgentSession {
-  schemaVersion: 4
+  schemaVersion: 5
   history: AgentMessage[]
   draft: RecommendationDraft
   phase: AgentPhase
@@ -86,7 +87,7 @@ export interface AgentSession {
 }
 
 export const initialSession: AgentSession = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   history: initialMessages,
   draft: emptyDraft,
   phase: 'discovering',
@@ -130,13 +131,29 @@ export function toggleDraftValue(values: string[], value: string): string[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value]
 }
 
+export function hasAreaBoundary(item: unknown): item is RecommendationItem {
+  if (!item || typeof item !== 'object') return false
+  const candidate = item as Partial<RecommendationItem>
+  return Boolean(
+    typeof candidate.area_size_sqm === 'number'
+    && candidate.area_size_sqm > 0
+    && candidate.boundary
+    && ['Polygon', 'MultiPolygon'].includes(candidate.boundary.type)
+    && Array.isArray(candidate.boundary.coordinates)
+    && candidate.boundary.coordinates.length > 0,
+  )
+}
+
 export function restoreSession(raw: string | null): AgentSession {
   if (!raw) return initialSession
   try {
     const parsed = JSON.parse(raw) as Partial<AgentSession>
     if (!Array.isArray(parsed.history) || !parsed.draft || !parsed.phase) return initialSession
+    const restoredItems = Array.isArray(parsed.items) && parsed.items.every(hasAreaBoundary)
+      ? parsed.items
+      : []
     return {
-      schemaVersion: 4,
+      schemaVersion: 5,
       history: parsed.history.slice(-20),
       draft: { ...emptyDraft, ...parsed.draft },
       phase: parsed.phase === ('gathering' as AgentPhase) ? 'discovering' : parsed.phase,
@@ -149,7 +166,7 @@ export function restoreSession(raw: string | null): AgentSession {
       dataGaps: Array.isArray(parsed.dataGaps) ? parsed.dataGaps : [],
       selectedScenarioId: parsed.selectedScenarioId || null,
       analysisRevision: Number(parsed.analysisRevision || 0),
-      items: Array.isArray(parsed.items) ? parsed.items : [],
+      items: restoredItems,
       comparison: Array.isArray(parsed.comparison) ? parsed.comparison : [],
       recommendationReport: parsed.recommendationReport || null,
       activeRequest: parsed.activeRequest || null,

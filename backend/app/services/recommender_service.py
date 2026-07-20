@@ -77,10 +77,11 @@ class RecommenderService:
         self.manifest = bundle.manifest
         self.index = bundle.recommendation_index
         self.evidence = bundle.evidence
+        self.boundaries = bundle.boundaries
         self.engine = AreaRecommender(self.index, self.evidence)
         self.cost_provider = cost_provider or UnavailableCostProvider()
         self.location_lookup = self.index.set_index("area_code")[
-            ["latitude", "longitude", "admin_dong_name"]
+            ["latitude", "longitude", "admin_dong_name", "area_size_sqm"]
         ].to_dict(orient="index")
 
     @property
@@ -220,6 +221,8 @@ class RecommenderService:
                 "industry_name": str(row["industry_name"]),
                 "latitude": float(location["latitude"]),
                 "longitude": float(location["longitude"]),
+                "area_size_sqm": float(location["area_size_sqm"]),
+                "boundary": self.boundaries[str(row["area_code"])],
                 "final_score": round(float(row["final_score"]), 2),
                 "base_final_score": (
                     round(float(candidate["base_final_score"]), 2)

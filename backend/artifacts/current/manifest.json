@@ -1,10 +1,14 @@
 {
   "artifact_version": "2025q4-v1",
-  "schema_version": 1,
+  "schema_version": 2,
   "created_at": "2026-07-16T14:46:12.972515+00:00",
   "coordinate_reference": {
     "source": "EPSG:5181",
     "target": "EPSG:4326"
+  },
+  "area_boundary_source": {
+    "name": "서울시 상권분석서비스(영역-상권)",
+    "dataset_id": "OA-15560"
   },
   "data_period": {
     "performance": "2021Q1~2025Q4",
@@ -19,6 +23,10 @@
     "area_industry_evidence.parquet": {
       "rows": 26810,
       "sha256": "840eeea42860d09800fff2abbfe42af1d3aee8b5723d1f125c08cb9599d6bf7b"
+    },
+    "area_boundaries.parquet": {
+      "rows": 1650,
+      "sha256": "76050f6d6e33bb0f940fc66c785ac4a2b3941d7ac17120e5dc73906059154fb4"
     },
     "commercial_rent_observations.parquet": {
       "rows": 6670,

@@ -69,6 +69,11 @@ export interface FitReason {
   weight: number
 }
 
+export interface AreaBoundary {
+  type: 'Polygon' | 'MultiPolygon'
+  coordinates: number[][][] | number[][][][]
+}
+
 export interface RecommendationItem {
   rank: number
   area_code: string
@@ -80,6 +85,8 @@ export interface RecommendationItem {
   industry_name: string
   latitude: number
   longitude: number
+  area_size_sqm: number
+  boundary: AreaBoundary
   final_score: number
   base_final_score: number | null
   budget_fit_score: number | null
