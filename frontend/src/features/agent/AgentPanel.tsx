@@ -11,6 +11,8 @@ import type {
   RelaxationOption,
   StrategyScenario,
   TradeoffInsight,
+  FloorType,
+  PropertyType,
 } from '../../types/api'
 import { isDraftReady, toggleDraftValue } from './model'
 
@@ -35,6 +37,7 @@ interface Props {
   onApplyRelaxation: (option: RelaxationOption) => void
   onAssumptionStatus: (id: string, status: AgentAssumption['status']) => void
   onDraftChange: (draft: RecommendationDraft) => void
+  onReset: () => void
 }
 
 const importanceFields: Array<{ key: keyof RecommendationDraft; label: string }> = [
@@ -54,8 +57,10 @@ export function AgentPanel({
   metadata, history, draft, phase, context, assumptions, explorationSummary, scenarios,
   tradeoffs, relaxationOptions, dataGaps, selectedScenarioId, comparison, loading,
   onSend, onConfirm, onSelectScenario, onApplyRelaxation, onAssumptionStatus, onDraftChange,
+  onReset,
 }: Props) {
   const [message, setMessage] = useState('')
+  const [areaUnit, setAreaUnit] = useState<'sqm' | 'pyeong'>('sqm')
   const update = <K extends keyof RecommendationDraft>(key: K, value: RecommendationDraft[K]) => {
     onDraftChange({ ...draft, [key]: value })
   }
@@ -70,7 +75,12 @@ export function AgentPanel({
   return (
     <aside className="agent-panel" aria-label="AI 입지 상담">
       <div className="agent-heading">
-        <span className="eyebrow">AI LOCATION AGENT</span>
+        <div className="agent-heading-top">
+          <span className="eyebrow">AI LOCATION AGENT</span>
+          <button type="button" onClick={onReset} disabled={loading} aria-label="대화와 분석 결과 초기화">
+            대화·분석 초기화
+          </button>
+        </div>
         <h2>창업 조건을 함께 정리해요</h2>
         <p>AI는 조건을 해석하고, 점수와 순위는 검증된 추천 엔진이 계산합니다.</p>
       </div>
@@ -178,6 +188,22 @@ export function AgentPanel({
             {metadata.industries.map((option) => <option key={option.code} value={option.code}>{option.name}</option>)}
           </select>
         </label>
+
+        <div className="budget-rent-card">
+          <div className="section-title"><span>예산·예상 임대료</span><small>선택 입력</small></div>
+          <div className="money-input-grid">
+            <label><span>총 창업예산</span><div><input type="number" min="1" value={toManwon(draft.total_startup_budget_krw)} onChange={(event) => update('total_startup_budget_krw', fromManwon(event.target.value))} placeholder="예: 15000" /><small>만원</small></div></label>
+            <label><span>월 환산임대료 한도</span><div><input type="number" min="1" value={toManwon(draft.monthly_converted_rent_limit_krw)} onChange={(event) => update('monthly_converted_rent_limit_krw', fromManwon(event.target.value))} placeholder="예: 500" /><small>만원</small></div></label>
+          </div>
+          {(draft.monthly_converted_rent_limit_krw != null || draft.rentable_area_sqm != null) && (
+            <div className="rent-condition-grid">
+              <label><span>임대면적(전용+공용)</span><div className="area-input"><input type="number" min="0.1" step="0.1" value={formatAreaInput(draft.rentable_area_sqm, areaUnit)} onChange={(event) => update('rentable_area_sqm', parseAreaInput(event.target.value, areaUnit))} /><button type="button" onClick={() => setAreaUnit(areaUnit === 'sqm' ? 'pyeong' : 'sqm')}>{areaUnit === 'sqm' ? '㎡' : '평'}</button></div></label>
+              <label><span>상가 유형</span><select value={draft.commercial_property_type || ''} onChange={(event) => update('commercial_property_type', (event.target.value || null) as PropertyType | null)}><option value="">선택</option>{metadata.commercial_property_types.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
+              <label><span>층</span><select value={draft.floor || ''} disabled={!draft.commercial_property_type} onChange={(event) => update('floor', (event.target.value || null) as FloorType | null)}><option value="">선택</option>{(metadata.commercial_property_types.find((item) => item.code === draft.commercial_property_type)?.floors || []).map((floor) => <option key={floor.code} value={floor.code}>{floor.name}</option>)}</select></label>
+            </div>
+          )}
+          <small>월 한도와 임대조건을 모두 입력한 경우에만 예산 적합도 20%를 반영합니다. 총 창업예산만 입력하면 순위는 바뀌지 않습니다.</small>
+        </div>
         <label>
           <span>선호 자치구</span>
           <select value={draft.preferred_districts[0] || ''} onChange={(event) => update('preferred_districts', event.target.value ? [event.target.value] : [])}>
@@ -284,4 +310,24 @@ function formatStoreCount(value: number | null): string {
 
 function formatStoreDensity(value: number | null): string {
   return value == null ? '-' : `${value.toLocaleString('ko-KR', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}개/㎢`
+}
+
+function toManwon(value: number | null): string {
+  return value == null ? '' : String(value / 10_000)
+}
+
+function fromManwon(value: string): number | null {
+  const parsed = Number(value)
+  return value === '' || !Number.isFinite(parsed) || parsed <= 0 ? null : parsed * 10_000
+}
+
+function formatAreaInput(value: number | null, unit: 'sqm' | 'pyeong'): string {
+  if (value == null) return ''
+  return String(Number((unit === 'sqm' ? value : value / 3.305785).toFixed(2)))
+}
+
+function parseAreaInput(value: string, unit: 'sqm' | 'pyeong'): number | null {
+  const parsed = Number(value)
+  if (value === '' || !Number.isFinite(parsed) || parsed <= 0) return null
+  return unit === 'sqm' ? parsed : parsed * 3.305785
 }

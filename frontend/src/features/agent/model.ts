@@ -14,7 +14,8 @@ import type {
   TradeoffInsight,
 } from '../../types/api'
 
-export const AGENT_SESSION_KEY = 'kb-location-agent-session-v3'
+export const AGENT_SESSION_KEY = 'kb-location-agent-session-v4'
+export const AGENT_V3_SESSION_KEY = 'kb-location-agent-session-v3'
 export const AGENT_V2_SESSION_KEY = 'kb-location-agent-session-v2'
 export const AGENT_LEGACY_SESSION_KEY = 'kb-location-agent-session-v1'
 
@@ -41,6 +42,11 @@ export const emptyDraft: RecommendationDraft = {
   min_data_reliability: 0,
   top_n: 10,
   strategy: 'balanced',
+  total_startup_budget_krw: null,
+  monthly_converted_rent_limit_krw: null,
+  rentable_area_sqm: null,
+  commercial_property_type: null,
+  floor: null,
 }
 
 export const emptyContext: FounderContext = {
@@ -60,7 +66,7 @@ export const initialMessages: AgentMessage[] = [{
 }]
 
 export interface AgentSession {
-  schemaVersion: 3
+  schemaVersion: 4
   history: AgentMessage[]
   draft: RecommendationDraft
   phase: AgentPhase
@@ -80,7 +86,7 @@ export interface AgentSession {
 }
 
 export const initialSession: AgentSession = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   history: initialMessages,
   draft: emptyDraft,
   phase: 'discovering',
@@ -101,13 +107,18 @@ export const initialSession: AgentSession = {
 
 export function hasDraftPreference(draft: RecommendationDraft): boolean {
   return Object.entries(draft).some(([key, value]) => {
-    if (key === 'industry_code' || key === 'top_n' || key === 'strategy') return false
+    if (['industry_code', 'top_n', 'strategy', 'total_startup_budget_krw', 'monthly_converted_rent_limit_krw', 'rentable_area_sqm', 'commercial_property_type', 'floor'].includes(key)) return false
     return Array.isArray(value) ? value.length > 0 : Boolean(value)
   })
 }
 
 export function isDraftReady(draft: RecommendationDraft): boolean {
-  return Boolean(draft.industry_code) && hasDraftPreference(draft)
+  const rentFields = [draft.rentable_area_sqm, draft.commercial_property_type, draft.floor]
+  const hasAnyRentField = rentFields.some((value) => value != null)
+  const hasAllRentFields = rentFields.every((value) => value != null)
+  const rentReady = (!hasAnyRentField || hasAllRentFields)
+    && (draft.monthly_converted_rent_limit_krw == null || hasAllRentFields)
+  return Boolean(draft.industry_code) && hasDraftPreference(draft) && rentReady
 }
 
 export function draftToRequest(draft: RecommendationDraft): RecommendationRequest {
@@ -125,7 +136,7 @@ export function restoreSession(raw: string | null): AgentSession {
     const parsed = JSON.parse(raw) as Partial<AgentSession>
     if (!Array.isArray(parsed.history) || !parsed.draft || !parsed.phase) return initialSession
     return {
-      schemaVersion: 3,
+      schemaVersion: 4,
       history: parsed.history.slice(-20),
       draft: { ...emptyDraft, ...parsed.draft },
       phase: parsed.phase === ('gathering' as AgentPhase) ? 'discovering' : parsed.phase,

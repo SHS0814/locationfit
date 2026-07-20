@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.api.v1 import agent, health, metadata, recommendations
+from backend.app.api.v1 import agent, costs, health, metadata, recommendations
 from backend.app.core.config import settings
 from backend.app.core.errors import (
     request_validation_error_handler,
@@ -19,6 +19,7 @@ from backend.app.core.errors import (
 )
 from backend.app.core.middleware import RecommendationRateLimitMiddleware, RequestContextMiddleware
 from backend.app.services.recommender_service import RecommenderService
+from backend.app.services.cost_provider import ParquetCommercialCostProvider, UnavailableCostProvider
 from backend.app.services.agent_service import (
     AgentStateError,
     AgentTimeoutError,
@@ -34,11 +35,17 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        app.state.recommender = RecommenderService(settings.artifact_dir)
+        try:
+            cost_provider = ParquetCommercialCostProvider.from_artifact_dir(settings.artifact_dir)
+        except (FileNotFoundError, RuntimeError) as exc:
+            logger.warning("Commercial cost artifacts unavailable: %s", exc)
+            cost_provider = UnavailableCostProvider()
+        app.state.recommender = RecommenderService(settings.artifact_dir, cost_provider)
         app.state.location_agent = LocationAgentService(
             app.state.recommender,
             OpenAIAgentRunner(model=settings.openai_model, max_turns=settings.agent_max_turns),
             timeout_seconds=settings.agent_timeout_seconds,
+            cost_provider=cost_provider,
         )
         app.state.startup_error = None
     except Exception as exc:
@@ -76,7 +83,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(AgentTimeoutError, agent_timeout_error_handler)
     app.add_exception_handler(AgentStateError, agent_state_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)
-    for router in (health.router, metadata.router, recommendations.router, agent.router):
+    for router in (health.router, metadata.router, recommendations.router, costs.router, agent.router):
         app.include_router(router, prefix=settings.api_prefix)
     return app
 

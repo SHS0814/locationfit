@@ -8,7 +8,8 @@
   },
   "data_period": {
     "performance": "2021Q1~2025Q4",
-    "profile": "2024Q1~2025Q4"
+    "profile": "2024Q1~2025Q4",
+    "commercial_rent": "2026Q1"
   },
   "files": {
     "area_recommendation_index.parquet": {
@@ -18,6 +19,15 @@
     "area_industry_evidence.parquet": {
       "rows": 26810,
       "sha256": "840eeea42860d09800fff2abbfe42af1d3aee8b5723d1f125c08cb9599d6bf7b"
+    },
+    "commercial_rent_observations.parquet": {
+      "rows": 6670,
+      "sha256": "a5b9c5f79b3dd9168c47c20586d94a5d31cac9476df6c30b1c2333e68d23d260"
+    },
+    "commercial_rent_crosswalk.parquet": {
+      "rows": 4950,
+      "sha256": "de1eec0b27b7e666b3266796ceb849bec2c35a36c0fc14ede9127d925c1c8337"
     }
-  }
+  },
+  "commercial_rent_source": "한국부동산원 R-ONE 상업용부동산 임대동향조사"
 }

@@ -58,6 +58,7 @@ SYSTEM_INSTRUCTIONS = """
 1. 사용자의 자연어를 제공된 코드, RecommendationDraft, FounderContext에만 매핑한다.
 2. current_draft와 current_context의 기존 값을 보존하되 사용자가 명시적으로 바꾼 값만 수정한다.
 3. 업종이 없으면 업종을 질문한다. 업종이 있으면 고객·운영시간·지역 유연성·위험 선호 중 비어 있는 가장 중요한 항목 하나만 질문한다.
+3-1. 사용자가 총 창업예산, 월 환산임대료 한도, 임대면적, 상가 유형, 층을 말하면 구조화 필드에 저장한다. 월 한도가 있는데 임대면적·상가 유형·층 중 하나라도 없으면 한 번의 질문으로 필요한 임대조건을 확인한다.
 4. 사용자가 명시하지 않았지만 합리적으로 추론한 내용은 assumptions에 inferred로 넣고 사실처럼 단정하지 않는다.
 5. 조건이 충분하면 데이터 탐색을 시작한다고 안내한다. 추천 실행이나 탐색 수치를 미리 말하지 않는다.
 6. recommend_confirmed_areas는 확인 액션에서 제공될 때 정확히 한 번 호출한다. 도구가 없으면 추천을 실행했다고 말하지 않는다.
@@ -143,6 +144,7 @@ class OpenAIAgentRunner:
             "area_types": metadata["area_types"],
             "age_groups": metadata["age_groups"],
             "time_bands": metadata["time_bands"],
+            "commercial_property_types": metadata["commercial_property_types"],
         }
         run_input = json.dumps(
             {
@@ -408,11 +410,23 @@ class LocationAgentService:
         return signals
 
     def _context_ready(self, draft: RecommendationDraft, context: FounderContext) -> bool:
-        return bool(draft.industry_code) and len(self._context_signals(draft, context)) >= 2
+        rent_fields = (draft.rentable_area_sqm, draft.commercial_property_type, draft.floor)
+        rent_ready = not any(value is not None for value in rent_fields) or all(
+            value is not None for value in rent_fields
+        )
+        if draft.monthly_converted_rent_limit_krw is not None:
+            rent_ready = rent_ready and all(value is not None for value in rent_fields)
+        return bool(draft.industry_code) and rent_ready and len(self._context_signals(draft, context)) >= 2
 
     def _next_question(self, draft: RecommendationDraft, context: FounderContext) -> str:
         if not draft.industry_code:
             return "어떤 업종이나 가게를 준비하고 계신가요? 메뉴나 서비스까지 편하게 말씀해주세요."
+        rent_fields = (draft.rentable_area_sqm, draft.commercial_property_type, draft.floor)
+        if (
+            draft.monthly_converted_rent_limit_krw is not None
+            or any(value is not None for value in rent_fields)
+        ) and not all(value is not None for value in rent_fields):
+            return "임대료를 추정하려면 공용면적을 포함한 임대면적, 상가 유형, 원하는 층을 알려주세요."
         signals = self._context_signals(draft, context)
         if "target_customer" not in signals:
             return "가장 중요하게 생각하는 고객은 누구이고, 주로 어떤 상황에서 방문할까요?"
@@ -477,6 +491,14 @@ class LocationAgentService:
         missing: list[str] = []
         if not draft.industry_code:
             missing.append("industry_code")
+        if draft.monthly_converted_rent_limit_krw is not None or any((
+            draft.rentable_area_sqm, draft.commercial_property_type, draft.floor,
+        )):
+            for field in ("rentable_area_sqm", "commercial_property_type", "floor"):
+                if getattr(draft, field) is None:
+                    missing.append(field)
+                if len(missing) >= 3:
+                    return missing
         signals = self._context_signals(draft, context)
         for field in ("target_customer", "operating_pattern", "location", "risk"):
             if field not in signals:
@@ -496,6 +518,15 @@ class LocationAgentService:
             parts.append("/".join(f"{age if age != '60_plus' else '60+'}대" for age in draft.target_age_groups))
         if draft.preferred_time_bands:
             parts.append("선호 시간대 " + ", ".join(draft.preferred_time_bands))
+        if draft.total_startup_budget_krw:
+            parts.append(f"총 창업예산 {draft.total_startup_budget_krw:,.0f}원")
+        if draft.monthly_converted_rent_limit_krw:
+            parts.append(f"월 환산임대료 한도 {draft.monthly_converted_rent_limit_krw:,.0f}원")
+        if draft.rentable_area_sqm and draft.commercial_property_type and draft.floor:
+            parts.append(
+                f"임대면적 {draft.rentable_area_sqm:g}㎡ · "
+                f"{draft.commercial_property_type} · {draft.floor}"
+            )
         importance_labels = {
             "floating_population_importance": "유동인구",
             "resident_population_importance": "상주인구",

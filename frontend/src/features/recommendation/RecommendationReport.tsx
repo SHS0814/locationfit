@@ -19,7 +19,15 @@ const metricRows: Array<{ key: RecommendationReportMetricKey; label: string; not
   { key: 'worker_population', label: '직장인구', note: '최근 4분기 평균' },
 ]
 
+const rentMetricRows: Array<{ key: RecommendationReportMetricKey; label: string; note: string }> = [
+  { key: 'estimated_converted_monthly_rent_krw', label: '예상 월 환산임대료', note: '입력한 임대면적 기준 · 관리비/VAT 제외' },
+  { key: 'unit_converted_rent_krw_sqm', label: '㎡당 월 환산임대료', note: '한국부동산원 인근 표본상권 기준' },
+]
+
 export function RecommendationReportView({ report }: Props) {
+  const visibleMetrics = report.areas.some((area) => area.rental_estimate)
+    ? [...metricRows, ...rentMetricRows]
+    : metricRows
   return (
     <section className="recommendation-report" aria-labelledby="recommendation-report-title">
       <header className="report-heading">
@@ -44,6 +52,13 @@ export function RecommendationReportView({ report }: Props) {
               <div><dt>과거 성과</dt><dd>{formatReportValue('reliability_adjusted_evidence_score', area.metrics.reliability_adjusted_evidence_score)}</dd></div>
               <div><dt>데이터 신뢰도</dt><dd>{formatReportValue('data_reliability', area.metrics.data_reliability)}</dd></div>
             </dl>
+            {area.rental_estimate && (
+              <p className="report-rent">
+                환산 월 임대료 {Math.round(area.rental_estimate.estimated_converted_monthly_rent_krw).toLocaleString('ko-KR')}원
+                {area.budget_fit_score != null && ` · 예산 적합 ${area.budget_fit_score.toFixed(1)}점`}
+                <small>{area.rental_estimate.survey_area_name} 표본상권 {area.rental_estimate.survey_area_distance_km.toFixed(1)}km · {area.rental_estimate.reference_period}</small>
+              </p>
+            )}
             {area.positive_reasons.length > 0 && (
               <p className="report-reason positive">
                 강점 · {area.positive_reasons.slice(0, 2).map((reason) => `${reason.factor} ${reason.fit_score.toFixed(1)}점`).join(', ')}
@@ -69,7 +84,7 @@ export function RecommendationReportView({ report }: Props) {
             </tr>
           </thead>
           <tbody>
-            {metricRows.map(({ key, label, note }) => (
+            {visibleMetrics.map(({ key, label, note }) => (
               <tr key={key}>
                 <th scope="row"><strong>{label}</strong><small>{note}</small></th>
                 {report.areas.map((area) => (
@@ -84,6 +99,11 @@ export function RecommendationReportView({ report }: Props) {
           </tbody>
         </table>
       </div>
+
+      <p className={report.rental_estimate_uses_default ? 'report-rent-basis default' : 'report-rent-basis'}>
+        임대료 산정 기준 · {report.rental_estimate_basis}
+        {report.rental_estimate_uses_default && ' · 임대조건을 입력하면 해당 조건으로 다시 계산됩니다.'}
+      </p>
 
       {report.areas.some((area) => area.warnings.length > 0) && (
         <div className="report-warnings">

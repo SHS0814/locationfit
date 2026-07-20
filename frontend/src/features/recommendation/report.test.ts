@@ -4,6 +4,8 @@ import { formatBenchmarkDelta, formatReportValue } from './report'
 describe('recommendation report formatting', () => {
   it('formats money, percentages, indices, and missing values with explicit units', () => {
     expect(formatReportValue('recent_4q_average_sales', 123456789)).toBe('123,456,789원')
+    expect(formatReportValue('estimated_converted_monthly_rent_krw', 3504754.54)).toBe('3,504,755원')
+    expect(formatReportValue('unit_converted_rent_krw_sqm', 53000.4)).toBe('53,000원/㎡·월')
     expect(formatReportValue('recent_4q_growth_rate', 0.123)).toBe('12.3%')
     expect(formatReportValue('recent_store_count', 12)).toBe('12개')
     expect(formatReportValue('same_industry_store_density', 56.74)).toBe('56.7개/㎢')

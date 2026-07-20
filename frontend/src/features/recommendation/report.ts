@@ -19,7 +19,12 @@ const populationMetrics = new Set<RecommendationReportMetricKey>([
 export function formatReportValue(metric: RecommendationReportMetricKey, value: number | null): string {
   if (value == null || !Number.isFinite(value)) return '자료 없음'
   if (scoreMetrics.has(metric)) return `${value.toFixed(1)}점`
-  if (metric === 'recent_4q_average_sales') return `${Math.round(value).toLocaleString('ko-KR')}원`
+  if (metric === 'recent_4q_average_sales' || metric === 'estimated_converted_monthly_rent_krw') {
+    return `${Math.round(value).toLocaleString('ko-KR')}원`
+  }
+  if (metric === 'unit_converted_rent_krw_sqm') {
+    return `${Math.round(value).toLocaleString('ko-KR')}원/㎡·월`
+  }
   if (percentMetrics.has(metric)) return `${(value * 100).toFixed(1)}%`
   if (metric === 'recent_store_count') return `${Math.round(value).toLocaleString('ko-KR')}개`
   if (metric === 'same_industry_store_density') return `${value.toLocaleString('ko-KR', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}개/㎢`

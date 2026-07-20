@@ -11,6 +11,7 @@ export interface MetadataResponse {
   area_types: MetadataOption[]
   age_groups: MetadataOption[]
   time_bands: MetadataOption[]
+  commercial_property_types: Array<MetadataOption & { floors: MetadataOption[] }>
 }
 
 export interface RecommendationRequest {
@@ -36,6 +37,29 @@ export interface RecommendationRequest {
   min_data_reliability: number
   top_n: number
   strategy: 'balanced' | 'condition_fit' | 'growth' | 'stability'
+  total_startup_budget_krw: number | null
+  monthly_converted_rent_limit_krw: number | null
+  rentable_area_sqm: number | null
+  commercial_property_type: PropertyType | null
+  floor: FloorType | null
+}
+
+export type PropertyType = 'small_retail' | 'medium_large_retail' | 'strata_retail'
+export type FloorType = 'b1' | 'f1' | 'f2' | 'f3' | 'f4' | 'f5' | 'f6_plus'
+
+export interface RentalEstimate {
+  property_type: PropertyType
+  floor: FloorType
+  rentable_area_sqm: number
+  unit_converted_rent_krw_sqm: number
+  estimated_converted_monthly_rent_krw: number
+  annual_conversion_rate: number
+  reference_period: string
+  survey_area_name: string
+  survey_area_distance_km: number
+  mapping_method: 'nearest_reb_survey_market'
+  source: string
+  disclosure: string
 }
 
 export interface FitReason {
@@ -57,6 +81,9 @@ export interface RecommendationItem {
   latitude: number
   longitude: number
   final_score: number
+  base_final_score: number | null
+  budget_fit_score: number | null
+  budget_adjusted: boolean
   condition_fit_score: number
   raw_evidence_score: number | null
   reliability_adjusted_evidence_score: number | null
@@ -66,6 +93,35 @@ export interface RecommendationItem {
   negative_reasons: FitReason[]
   evidence_summary: Record<string, unknown>
   warnings: string[]
+  rental_estimate: RentalEstimate | null
+}
+
+export interface LeasePlanRequest {
+  area_code: string
+  commercial_property_type: PropertyType
+  floor: FloorType
+  rentable_area_sqm: number
+  deposit_krw: number | null
+  total_startup_budget_krw: number | null
+}
+
+export interface LeasePlan {
+  estimated_converted_monthly_rent_krw: number
+  deposit_krw: number | null
+  cash_monthly_rent_krw: number | null
+  annual_cash_rent_krw: number | null
+  first_year_cash_outlay_krw: number | null
+  refundable_deposit_krw: number | null
+  remaining_startup_budget_krw: number | null
+  deposit_share_of_budget: number | null
+  annual_conversion_rate: number
+  disclosure: string
+}
+
+export interface LeasePlanResponse {
+  request_id: string
+  rental_estimate: RentalEstimate
+  lease_plan: LeasePlan
 }
 
 export interface RecommendationResponse {
@@ -182,6 +238,8 @@ export interface RecommendationReportMetrics {
   resident_population: number | null
   worker_population: number | null
   data_reliability: number | null
+  estimated_converted_monthly_rent_krw: number | null
+  unit_converted_rent_krw_sqm: number | null
 }
 
 export type RecommendationReportMetricKey = keyof RecommendationReportMetrics
@@ -193,6 +251,9 @@ export interface RecommendationReportArea {
   district_name: string
   area_type: string
   reliability_grade: string
+  base_final_score: number | null
+  budget_fit_score: number | null
+  rental_estimate: RentalEstimate | null
   metrics: RecommendationReportMetrics
   benchmark_delta: RecommendationReportMetrics
   positive_reasons: FitReason[]
@@ -205,6 +266,8 @@ export interface RecommendationReport {
   benchmark_label: string
   data_period: Record<string, string>
   competition_reference_period: string
+  rental_estimate_basis: string
+  rental_estimate_uses_default: boolean
   benchmark: RecommendationReportMetrics
   areas: RecommendationReportArea[]
 }

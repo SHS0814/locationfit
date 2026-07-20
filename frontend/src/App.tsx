@@ -6,19 +6,23 @@ import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
   AGENT_V2_SESSION_KEY,
+  AGENT_V3_SESSION_KEY,
   draftToRequest,
+  initialSession,
   isDraftReady,
   restoreSession,
   type AgentSession,
 } from './features/agent/model'
 import { RecommendationResults } from './features/recommendation/RecommendationResults'
 import { RecommendationReportView } from './features/recommendation/RecommendationReport'
+import { LeasePlanCard } from './features/recommendation/LeasePlanCard'
 import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption } from './types/api'
 
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)
+      || sessionStorage.getItem(AGENT_V3_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V2_SESSION_KEY)
       || sessionStorage.getItem(AGENT_LEGACY_SESSION_KEY),
   ))
@@ -53,7 +57,7 @@ export default function App() {
         ? draftToRequest(response.draft)
         : keepActiveResults ? session.activeRequest : null
       const nextSession: AgentSession = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
         draft: response.draft,
         phase: response.phase,
@@ -178,6 +182,23 @@ export default function App() {
     }))
   }
 
+  const resetConversationAndAnalysis = () => {
+    if (!window.confirm('대화와 모든 분석 결과를 초기화할까요?')) return
+    sessionStorage.removeItem(AGENT_SESSION_KEY)
+    sessionStorage.removeItem(AGENT_V3_SESSION_KEY)
+    sessionStorage.removeItem(AGENT_V2_SESSION_KEY)
+    sessionStorage.removeItem(AGENT_LEGACY_SESSION_KEY)
+    setSession({
+      ...initialSession,
+      history: [...initialSession.history],
+      draft: { ...initialSession.draft },
+      context: { ...initialSession.context },
+    })
+    setSelected(null)
+    setError(null)
+    setLastTurn(null)
+  }
+
   if (!metadata) {
     return <main className="boot-screen"><div className="loader" /><p>{error || '상권 데이터를 불러오는 중입니다.'}</p></main>
   }
@@ -220,6 +241,7 @@ export default function App() {
             onApplyRelaxation={applyRelaxation}
             onAssumptionStatus={updateAssumption}
             onDraftChange={editDraft}
+            onReset={resetConversationAndAnalysis}
           />
           <div className="output-area">
             {error && <div className="error-banner" role="alert">{error} {lastTurn && <button type="button" onClick={() => executeTurn(lastTurn, false)}>다시 시도</button>}</div>}
@@ -227,6 +249,12 @@ export default function App() {
               <>
                 <RecommendationMap items={session.items} selected={selected} onSelect={setSelected} />
                 <RecommendationResults items={session.items} selectedCode={selected?.area_code || null} onSelect={setSelected} />
+                {selected?.rental_estimate && (
+                  <LeasePlanCard
+                    item={selected}
+                    totalStartupBudgetKrw={session.draft.total_startup_budget_krw}
+                  />
+                )}
                 {session.recommendationReport && <RecommendationReportView report={session.recommendationReport} />}
               </>
             ) : (

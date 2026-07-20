@@ -1,0 +1,38 @@
+{
+  "api_url": "https://www.reb.or.kr/r-one/openapi/SttsApiTblData.do",
+  "gis_url": "https://www.reb.or.kr/r-one/portal/gis/getCommercialRate.do",
+  "cycle": "QY",
+  "property_types": {
+    "small_retail": {
+      "name": "소규모 상가",
+      "gis_building_code": "3",
+      "regional_rent_table": "T248223134698125",
+      "floor_rent_table": "T246233134891629",
+      "conversion_rate_table": "T246253134905233"
+    },
+    "medium_large_retail": {
+      "name": "중대형 상가",
+      "gis_building_code": "2",
+      "regional_rent_table": "T244363134858603",
+      "floor_rent_table": "T241873134863890",
+      "conversion_rate_table": "T241883134877452"
+    },
+    "strata_retail": {
+      "name": "집합 상가",
+      "gis_building_code": "4",
+      "regional_rent_table": "T244913134948657",
+      "floor_rent_table": "T249023134703697",
+      "conversion_rate_table": "T243133134985812"
+    }
+  },
+  "floor_codes": {
+    "지하1층": "b1",
+    "1층": "f1",
+    "2층": "f2",
+    "3층": "f3",
+    "4층": "f4",
+    "5층": "f5",
+    "6층이상": "f6_plus",
+    "6층 이상": "f6_plus"
+  }
+}

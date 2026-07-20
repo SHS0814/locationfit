@@ -4,7 +4,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from backend.app.schemas.recommendation import FitReason, RecommendationItem, RecommendationRequestSchema
+from backend.app.schemas.recommendation import (
+    FitReason,
+    RecommendationItem,
+    RecommendationRequestSchema,
+    RentalEstimateSchema,
+)
+from backend.app.services.cost_provider import FloorType, PropertyType
 
 
 class AgentMessage(BaseModel):
@@ -65,9 +71,18 @@ class RecommendationDraft(BaseModel):
     min_data_reliability: float = Field(0, ge=0, le=1)
     top_n: int = Field(10, ge=1, le=50)
     strategy: Literal["balanced", "condition_fit", "growth", "stability"] = "balanced"
+    total_startup_budget_krw: float | None = Field(default=None, gt=0)
+    monthly_converted_rent_limit_krw: float | None = Field(default=None, gt=0)
+    rentable_area_sqm: float | None = Field(default=None, gt=0, le=10_000)
+    commercial_property_type: PropertyType | None = None
+    floor: FloorType | None = None
 
     def has_preference(self) -> bool:
-        values = self.model_dump(exclude={"industry_code", "top_n", "strategy"}).values()
+        values = self.model_dump(exclude={
+            "industry_code", "top_n", "strategy", "total_startup_budget_krw",
+            "monthly_converted_rent_limit_krw", "rentable_area_sqm",
+            "commercial_property_type", "floor",
+        }).values()
         return any(bool(value) for value in values)
 
     def to_request(self) -> RecommendationRequestSchema:
@@ -193,6 +208,8 @@ class RecommendationReportMetrics(BaseModel):
     resident_population: float | None = None
     worker_population: float | None = None
     data_reliability: float | None = None
+    estimated_converted_monthly_rent_krw: float | None = None
+    unit_converted_rent_krw_sqm: float | None = None
 
 
 class RecommendationReportArea(BaseModel):
@@ -204,6 +221,9 @@ class RecommendationReportArea(BaseModel):
     district_name: str
     area_type: str
     reliability_grade: str
+    base_final_score: float | None = None
+    budget_fit_score: float | None = None
+    rental_estimate: RentalEstimateSchema | None = None
     metrics: RecommendationReportMetrics
     benchmark_delta: RecommendationReportMetrics
     positive_reasons: list[FitReason] = Field(default_factory=list)
@@ -218,6 +238,8 @@ class RecommendationReport(BaseModel):
     benchmark_label: str
     data_period: dict[str, str]
     competition_reference_period: str
+    rental_estimate_basis: str
+    rental_estimate_uses_default: bool
     benchmark: RecommendationReportMetrics
     areas: list[RecommendationReportArea]
 

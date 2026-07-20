@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from backend.app.services.cost_provider import FloorType, PropertyType
 
 
 class RecommendationRequestSchema(BaseModel):
@@ -30,6 +32,22 @@ class RecommendationRequestSchema(BaseModel):
     min_data_reliability: float = Field(0, ge=0, le=1)
     top_n: int = Field(10, ge=1, le=50)
     strategy: Literal["balanced", "condition_fit", "growth", "stability"] = "balanced"
+    total_startup_budget_krw: float | None = Field(default=None, gt=0)
+    monthly_converted_rent_limit_krw: float | None = Field(default=None, gt=0)
+    rentable_area_sqm: float | None = Field(default=None, gt=0, le=10_000)
+    commercial_property_type: PropertyType | None = None
+    floor: FloorType | None = None
+
+    @model_validator(mode="after")
+    def validate_rental_conditions(self) -> "RecommendationRequestSchema":
+        fields = (self.rentable_area_sqm, self.commercial_property_type, self.floor)
+        if any(value is not None for value in fields) and not all(value is not None for value in fields):
+            raise ValueError("임대료 추정에는 임대면적, 상가 유형, 층을 모두 입력해야 합니다.")
+        if self.monthly_converted_rent_limit_krw is not None and not all(
+            value is not None for value in fields
+        ):
+            raise ValueError("월 환산임대료 한도를 적용하려면 임대면적, 상가 유형, 층이 필요합니다.")
+        return self
 
 
 class FitReason(BaseModel):
@@ -51,6 +69,9 @@ class RecommendationItem(BaseModel):
     latitude: float
     longitude: float
     final_score: float
+    base_final_score: float | None = None
+    budget_fit_score: float | None = None
+    budget_adjusted: bool = False
     condition_fit_score: float
     raw_evidence_score: float | None
     reliability_adjusted_evidence_score: float | None
@@ -60,6 +81,24 @@ class RecommendationItem(BaseModel):
     negative_reasons: list[FitReason]
     evidence_summary: dict[str, Any]
     warnings: list[str]
+    rental_estimate: "RentalEstimateSchema | None" = None
+
+
+class RentalEstimateSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    property_type: PropertyType
+    floor: FloorType
+    rentable_area_sqm: float
+    unit_converted_rent_krw_sqm: float
+    estimated_converted_monthly_rent_krw: float
+    annual_conversion_rate: float
+    reference_period: str
+    survey_area_name: str
+    survey_area_distance_km: float
+    mapping_method: Literal["nearest_reb_survey_market"]
+    source: str
+    disclosure: str
 
 
 class RecommendationResponse(BaseModel):
@@ -74,6 +113,10 @@ class MetadataOption(BaseModel):
     name: str
 
 
+class CommercialPropertyTypeOption(MetadataOption):
+    floors: list[MetadataOption]
+
+
 class MetadataResponse(BaseModel):
     artifact_version: str
     data_period: dict[str, str]
@@ -82,3 +125,4 @@ class MetadataResponse(BaseModel):
     area_types: list[MetadataOption]
     age_groups: list[MetadataOption]
     time_bands: list[MetadataOption]
+    commercial_property_types: list[CommercialPropertyTypeOption]

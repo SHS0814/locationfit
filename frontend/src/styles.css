@@ -82,6 +82,8 @@ fieldset { border: 0; padding: 0; margin: 23px 0 0; }
 .reason-row { display: flex; flex-wrap: wrap; gap: 5px; }
 .reason-row span { background: #f2f1ed; padding: 3px 6px; font-size: 9px; color: #5e5c56; }
 .result-main .warning { color: #9b6515; }
+.result-main .rent-summary { margin-top: 8px; color: #2d6c50; font-weight: 600; }
+.budget-fit { display: inline-block; margin-top: 2px; padding: 3px 6px; border-radius: 99px; background: #eaf5ef; color: #276c4e; font-size: 9px; font-weight: 700; }
 .score { min-width: 58px; text-align: right; }
 .score strong { display: block; font: 700 22px 'DM Sans'; color: #2d6c50; }
 .score span { color: #96938a; font-size: 9px; }
@@ -91,6 +93,10 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .agent-panel { min-width: 0; background: #fff; border-top: 5px solid #ffcc00; box-shadow: 0 12px 35px rgba(25, 35, 31, .08); }
 .agent-heading { padding: 28px 28px 20px; border-bottom: 1px solid #eceae4; }
+.agent-heading-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.agent-heading-top button { padding: 5px 8px; border: 1px solid #d7d3c8; border-radius: 3px; background: #fff; color: #77736b; font-size: 9px; font-weight: 700; }
+.agent-heading-top button:hover { border-color: #a9a398; color: #383630; background: #faf9f5; }
+.agent-heading-top button:disabled { opacity: .45; cursor: default; }
 .agent-heading h2 { margin: 9px 0 5px; font-size: 22px; letter-spacing: -.03em; }
 .agent-heading p { margin: 0; color: #77756e; font-size: 12px; line-height: 1.6; }
 .chat-log { max-height: 330px; min-height: 220px; padding: 18px; overflow-y: auto; background: #faf9f5; }
@@ -144,6 +150,15 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
 .condition-card > label { display: block; margin-top: 11px; }
 .condition-card > label > span { display: block; margin-bottom: 5px; }
 .condition-card select { height: 38px; font-size: 12px; }
+.budget-rent-card { margin-top: 15px; padding: 13px; border: 1px solid #e4dfcf; border-radius: 4px; background: #fffdf4; }
+.money-input-grid, .rent-condition-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.money-input-grid label > span, .rent-condition-grid label > span { display: block; margin-bottom: 5px; color: #706e67; font-size: 10px; font-weight: 700; }
+.money-input-grid label > div { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 5px; }
+.money-input-grid input, .rent-condition-grid input { min-width: 0; width: 100%; height: 36px; padding: 0 9px; border: 1px solid #d8d6cf; border-radius: 3px; background: #fff; font-size: 11px; }
+.money-input-grid small { margin: 0; color: #716e66; }
+.rent-condition-grid { grid-template-columns: 1.15fr 1fr .8fr; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e9e3d1; }
+.area-input { display: grid; grid-template-columns: 1fr 35px; }
+.area-input button { border: 1px solid #d8d6cf; border-left: 0; background: #f1efe7; color: #55524b; font-size: 10px; }
 .condition-group { margin-top: 15px; }
 .condition-group > span { display: block; margin-bottom: 7px; }
 .condition-details { margin-top: 16px; padding: 12px 0; border-top: 1px solid #eceae4; border-bottom: 1px solid #eceae4; }
@@ -175,6 +190,10 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
 .report-reason { margin: 5px 0 0; font-size: 9px; line-height: 1.5; }
 .report-reason.positive { color: #276c4e; }
 .report-reason.negative { color: #94611b; }
+.report-rent { margin: 8px 0; padding: 8px; background: #edf6f1; color: #276c4e; font-size: 9px; font-weight: 700; }
+.report-rent small { display: block; margin-top: 3px; color: #60776b; font-weight: 400; }
+.report-rent-basis { margin: 12px 0 0; padding: 9px 11px; border-left: 3px solid #367358; background: #f1f7f4; color: #536b5f; font-size: 9px; line-height: 1.5; }
+.report-rent-basis.default { border-left-color: #d4aa00; background: #fff9df; color: #75631f; }
 .report-table-wrap { overflow-x: auto; border: 1px solid #dedbd2; }
 .report-table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 10px; }
 .report-table caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -188,6 +207,24 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
 .report-warnings { margin-top: 14px; padding: 12px 14px; background: #fff7e8; color: #79571d; font-size: 9px; }
 .report-warnings p { margin: 4px 0 0; }
 .report-footnote { margin-top: 14px; color: #817e76; font-size: 9px; line-height: 1.5; }
+.lease-plan-card { margin-top: 18px; padding: 24px; border: 1px solid #dcd8cc; border-top: 4px solid #ffcc00; background: #fff; }
+.lease-plan-card h2 { margin: 5px 0; font-size: 20px; }
+.lease-plan-card > div > p { margin: 0; color: #706d65; font-size: 11px; }
+.lease-plan-card > div > p strong { color: #276c4e; }
+.lease-plan-input { display: flex; align-items: end; gap: 9px; margin-top: 16px; }
+.lease-plan-input label { flex: 1; }
+.lease-plan-input label > span { display: block; margin-bottom: 5px; color: #706e67; font-size: 10px; font-weight: 700; }
+.lease-plan-input label { display: grid; grid-template-columns: 1fr auto; }
+.lease-plan-input label > span { grid-column: 1 / -1; }
+.lease-plan-input input { height: 40px; min-width: 0; padding: 0 10px; border: 1px solid #d8d6cf; }
+.lease-plan-input label small { display: grid; place-items: center; min-width: 42px; border: 1px solid #d8d6cf; border-left: 0; color: #77736c; }
+.lease-plan-input button { height: 40px; padding: 0 16px; border: 0; border-radius: 3px; background: #26322c; color: #ffcf19; font-size: 11px; font-weight: 700; }
+.lease-plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 16px 0 10px; }
+.lease-plan-grid div { padding: 10px; background: #f7f6f1; }
+.lease-plan-grid dt { color: #817e76; font-size: 9px; }
+.lease-plan-grid dd { margin: 4px 0 0; font-size: 12px; font-weight: 800; }
+.lease-plan-disclosure { display: block; color: #89867e; font-size: 9px; line-height: 1.5; }
+.lease-plan-error { color: #a2382a !important; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .55; } }
 @media (max-width: 900px) {
@@ -207,4 +244,5 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
   .recommendation-report { padding: 20px 14px; }
   .report-heading { align-items: start; flex-direction: column; }
   .report-heading p { text-align: left; }
+  .money-input-grid, .rent-condition-grid, .lease-plan-grid { grid-template-columns: 1fr; }
 }

@@ -1,4 +1,4 @@
-import type { AgentTurnRequest, AgentTurnResponse, ApiErrorBody, MetadataResponse, RecommendationRequest, RecommendationResponse } from '../types/api'
+import type { AgentTurnRequest, AgentTurnResponse, ApiErrorBody, LeasePlanRequest, LeasePlanResponse, MetadataResponse, RecommendationRequest, RecommendationResponse } from '../types/api'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '')
 
@@ -34,6 +34,11 @@ export const api = {
     }),
   agentTurn: (payload: AgentTurnRequest) =>
     request<AgentTurnResponse>('/agent/turns', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  leasePlan: (payload: LeasePlanRequest) =>
+    request<LeasePlanResponse>('/commercial-costs/lease-plan', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

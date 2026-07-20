@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,11 @@ import pandas as pd
 
 from backend.app.schemas.recommendation import RecommendationRequestSchema
 from backend.app.services.artifact_loader import load_artifacts
+from backend.app.services.cost_provider import (
+    CommercialCostProvider,
+    UnavailableCostProvider,
+    calculate_budget_fit,
+)
 from backend.recommender import AreaRecommender, RecommendationRequest
 from src.models.area_recommender import RecommendationResult
 
@@ -23,6 +29,11 @@ TIME_OPTIONS = [
     {"code": "11_14", "name": "11~14시"}, {"code": "14_17", "name": "14~17시"},
     {"code": "17_21", "name": "17~21시"}, {"code": "21_24", "name": "21~24시"},
 ]
+DEFAULT_RENT_REFERENCE = {
+    "rentable_area_sqm": 33.05785,
+    "commercial_property_type": "small_retail",
+    "floor": "f1",
+}
 
 REPORT_METRICS = (
     "final_score",
@@ -37,6 +48,8 @@ REPORT_METRICS = (
     "resident_population",
     "worker_population",
     "data_reliability",
+    "estimated_converted_monthly_rent_krw",
+    "unit_converted_rent_krw_sqm",
 )
 
 
@@ -55,12 +68,17 @@ def _json_safe(value: Any) -> Any:
 
 
 class RecommenderService:
-    def __init__(self, artifact_dir: Path) -> None:
+    def __init__(
+        self,
+        artifact_dir: Path,
+        cost_provider: CommercialCostProvider | None = None,
+    ) -> None:
         bundle = load_artifacts(artifact_dir)
         self.manifest = bundle.manifest
         self.index = bundle.recommendation_index
         self.evidence = bundle.evidence
         self.engine = AreaRecommender(self.index, self.evidence)
+        self.cost_provider = cost_provider or UnavailableCostProvider()
         self.location_lookup = self.index.set_index("area_code")[
             ["latitude", "longitude", "admin_dong_name"]
         ].to_dict(orient="index")
@@ -94,22 +112,103 @@ class RecommenderService:
             ],
             "age_groups": AGE_OPTIONS,
             "time_bands": TIME_OPTIONS,
+            "commercial_property_types": self.cost_provider.options(),
         }
 
     def _run_recommendation(self, payload: RecommendationRequestSchema) -> RecommendationResult:
-        values = payload.model_dump()
+        values = payload.model_dump(exclude={
+            "total_startup_budget_krw", "monthly_converted_rent_limit_krw",
+            "rentable_area_sqm", "commercial_property_type", "floor",
+        })
         for field in (
             "preferred_area_types", "target_age_groups", "preferred_time_bands",
             "preferred_districts", "excluded_districts",
         ):
             values[field] = tuple(values[field])
         request = RecommendationRequest(**values)
-        return self.engine.recommend(request)
+        result = self.engine.recommend(request)
+        return self._apply_budget_ranking(result, payload)
 
-    def _serialize_recommendations(self, result: RecommendationResult) -> list[dict[str, Any]]:
+    def _estimate(self, area_code: str, payload: RecommendationRequestSchema):
+        if (
+            payload.rentable_area_sqm is None
+            or payload.commercial_property_type is None
+            or payload.floor is None
+        ):
+            return None
+        return self.cost_provider.estimate(
+            area_code,
+            payload.commercial_property_type,
+            payload.floor,
+            payload.rentable_area_sqm,
+        )
+
+    def _apply_budget_ranking(
+        self,
+        result: RecommendationResult,
+        payload: RecommendationRequestSchema,
+    ) -> RecommendationResult:
+        """Rerank the deterministic engine's candidate pool only when a rent cap is usable."""
+        if payload.monthly_converted_rent_limit_krw is None:
+            return result
+        candidates = result.candidates.copy()
+        estimates = {
+            str(area_code): self._estimate(str(area_code), payload)
+            for area_code in candidates["area_code"]
+        }
+        if not any(estimate is not None for estimate in estimates.values()):
+            diagnostics = {
+                **result.diagnostics,
+                "budget_adjusted": False,
+                "budget_adjustment_reason": "commercial_cost_unavailable",
+            }
+            return replace(result, diagnostics=diagnostics)
+        candidates["base_final_score"] = candidates["final_score"].astype(float)
+        candidates["budget_fit_score"] = candidates["area_code"].astype(str).map(
+            lambda code: (
+                calculate_budget_fit(
+                    float(payload.monthly_converted_rent_limit_krw),
+                    estimates[code].estimated_converted_monthly_rent_krw,
+                )
+                if estimates.get(code) is not None else 0.0
+            )
+        )
+        candidates["final_score"] = (
+            candidates["base_final_score"] * 0.8 + candidates["budget_fit_score"] * 0.2
+        ).clip(0, 100)
+        candidates = candidates.sort_values(
+            ["final_score", "condition_fit_score", "area_code"],
+            ascending=[False, False, True],
+        ).reset_index(drop=True)
+        candidates["rank"] = range(1, len(candidates) + 1)
+        recommendations = candidates.head(payload.top_n)[result.recommendations.columns].copy()
+        diagnostics = {
+            **result.diagnostics,
+            "returned": len(recommendations),
+            "budget_adjusted": True,
+            "budget_weight": 0.2,
+            "base_score_weight": 0.8,
+            "rent_estimate_coverage": sum(value is not None for value in estimates.values()),
+        }
+        return replace(
+            result,
+            recommendations=recommendations,
+            candidates=candidates,
+            diagnostics=diagnostics,
+        )
+
+    def _serialize_recommendations(
+        self,
+        result: RecommendationResult,
+        payload: RecommendationRequestSchema,
+    ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         for row in result.recommendations.to_dict(orient="records"):
             location = self.location_lookup[str(row["area_code"])]
+            candidate = result.candidates.loc[
+                result.candidates["area_code"].astype(str).eq(str(row["area_code"]))
+            ].iloc[0]
+            estimate = self._estimate(str(row["area_code"]), payload)
             items.append({
                 "rank": int(row["rank"]),
                 "area_code": str(row["area_code"]),
@@ -122,6 +221,17 @@ class RecommenderService:
                 "latitude": float(location["latitude"]),
                 "longitude": float(location["longitude"]),
                 "final_score": round(float(row["final_score"]), 2),
+                "base_final_score": (
+                    round(float(candidate["base_final_score"]), 2)
+                    if "base_final_score" in candidate and pd.notna(candidate["base_final_score"])
+                    else None
+                ),
+                "budget_fit_score": (
+                    round(float(candidate["budget_fit_score"]), 2)
+                    if "budget_fit_score" in candidate and pd.notna(candidate["budget_fit_score"])
+                    else None
+                ),
+                "budget_adjusted": bool(result.diagnostics.get("budget_adjusted", False)),
                 "condition_fit_score": round(float(row["condition_fit_score"]), 2),
                 "raw_evidence_score": _json_safe(row["raw_evidence_score"]),
                 "reliability_adjusted_evidence_score": _json_safe(row["reliability_adjusted_evidence_score"]),
@@ -131,12 +241,13 @@ class RecommenderService:
                 "negative_reasons": json.loads(row["negative_reasons"]),
                 "evidence_summary": _json_safe(json.loads(row["evidence_summary"])),
                 "warnings": json.loads(row["warning_messages"]),
+                "rental_estimate": estimate.to_dict() if estimate is not None else None,
             })
         return items
 
     def recommend(self, payload: RecommendationRequestSchema) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         result = self._run_recommendation(payload)
-        items = self._serialize_recommendations(result)
+        items = self._serialize_recommendations(result, payload)
         return items, _json_safe(result.diagnostics)
 
     def recommend_with_report(
@@ -145,23 +256,61 @@ class RecommenderService:
     ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
         """Return ranked items and a top-three report against the full eligible population."""
         result = self._run_recommendation(payload)
-        items = self._serialize_recommendations(result)
-        return items, _json_safe(result.diagnostics), self._build_recommendation_report(result, items)
+        items = self._serialize_recommendations(result, payload)
+        return (
+            items,
+            _json_safe(result.diagnostics),
+            self._build_recommendation_report(result, items, payload),
+        )
 
     def _build_recommendation_report(
         self,
         result: RecommendationResult,
         items: list[dict[str, Any]],
+        payload: RecommendationRequestSchema,
     ) -> dict[str, Any]:
         eligible = result.eligible_candidates.copy()
+        has_rent_conditions = all((
+            payload.rentable_area_sqm is not None,
+            payload.commercial_property_type is not None,
+            payload.floor is not None,
+        ))
+        rental_payload = payload if has_rent_conditions else payload.model_copy(
+            update=DEFAULT_RENT_REFERENCE
+        )
+        rental_basis = (
+            f"입력 조건 · {float(rental_payload.rentable_area_sqm):g}㎡ · "
+            f"{rental_payload.commercial_property_type} · {rental_payload.floor}"
+            if has_rent_conditions
+            else "기본 참고값 · 소규모 상가 · 1층 · 10평(33.1㎡)"
+        )
 
         def metric_values(row: dict[str, Any]) -> dict[str, Any]:
             return _json_safe({metric: row.get(metric) for metric in REPORT_METRICS})
 
         benchmark: dict[str, Any] = {}
         for metric in REPORT_METRICS:
-            values = pd.to_numeric(eligible.get(metric), errors="coerce").dropna()
+            source = eligible[metric] if metric in eligible else pd.Series(dtype="float64")
+            values = pd.to_numeric(source, errors="coerce").dropna()
             benchmark[metric] = float(values.median()) if not values.empty else None
+        rental_estimates = {
+            str(area_code): self._estimate(str(area_code), rental_payload)
+            for area_code in eligible["area_code"].astype(str)
+        }
+        monthly_values = [
+            estimate.estimated_converted_monthly_rent_krw
+            for estimate in rental_estimates.values() if estimate is not None
+        ]
+        unit_values = [
+            estimate.unit_converted_rent_krw_sqm
+            for estimate in rental_estimates.values() if estimate is not None
+        ]
+        benchmark["estimated_converted_monthly_rent_krw"] = (
+            float(pd.Series(monthly_values).median()) if monthly_values else None
+        )
+        benchmark["unit_converted_rent_krw_sqm"] = (
+            float(pd.Series(unit_values).median()) if unit_values else None
+        )
         benchmark = _json_safe(benchmark)
 
         eligible_lookup = {
@@ -172,6 +321,15 @@ class RecommenderService:
         for item in items[:3]:
             source = eligible_lookup[str(item["area_code"])]
             metrics = metric_values(source)
+            estimate = rental_estimates.get(str(item["area_code"]))
+            rental_estimate = estimate.to_dict() if estimate is not None else None
+            if rental_estimate:
+                metrics["estimated_converted_monthly_rent_krw"] = rental_estimate.get(
+                    "estimated_converted_monthly_rent_krw"
+                )
+                metrics["unit_converted_rent_krw_sqm"] = rental_estimate.get(
+                    "unit_converted_rent_krw_sqm"
+                )
             # Keep public recommendation scores byte-for-byte aligned with the result cards.
             for score in (
                 "final_score",
@@ -194,6 +352,9 @@ class RecommenderService:
                 "district_name": item["district_name"],
                 "area_type": item["area_type"],
                 "reliability_grade": item["reliability_grade"],
+                "base_final_score": item.get("base_final_score"),
+                "budget_fit_score": item.get("budget_fit_score"),
+                "rental_estimate": rental_estimate,
                 "metrics": metrics,
                 "benchmark_delta": delta,
                 "positive_reasons": item["positive_reasons"],
@@ -209,6 +370,8 @@ class RecommenderService:
             "benchmark_label": "동일 조건 전체 후보 중앙값",
             "data_period": data_period,
             "competition_reference_period": competition_reference_period,
+            "rental_estimate_basis": rental_basis,
+            "rental_estimate_uses_default": not has_rent_conditions,
             "benchmark": benchmark,
             "areas": areas,
         }
