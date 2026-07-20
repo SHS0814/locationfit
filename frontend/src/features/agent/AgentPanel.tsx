@@ -12,7 +12,6 @@ import type {
   StrategyScenario,
   TradeoffInsight,
   FloorType,
-  PropertyType,
 } from '../../types/api'
 import { isDraftReady, toggleDraftValue } from './model'
 
@@ -198,8 +197,7 @@ export function AgentPanel({
           {(draft.monthly_converted_rent_limit_krw != null || draft.rentable_area_sqm != null) && (
             <div className="rent-condition-grid">
               <label><span>임대면적(전용+공용)</span><div className="area-input"><input type="number" min="0.1" step="0.1" value={formatAreaInput(draft.rentable_area_sqm, areaUnit)} onChange={(event) => update('rentable_area_sqm', parseAreaInput(event.target.value, areaUnit))} /><button type="button" onClick={() => setAreaUnit(areaUnit === 'sqm' ? 'pyeong' : 'sqm')}>{areaUnit === 'sqm' ? '㎡' : '평'}</button></div></label>
-              <label><span>상가 유형</span><select value={draft.commercial_property_type || ''} onChange={(event) => update('commercial_property_type', (event.target.value || null) as PropertyType | null)}><option value="">선택</option>{metadata.commercial_property_types.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select></label>
-              <label><span>층</span><select value={draft.floor || ''} disabled={!draft.commercial_property_type} onChange={(event) => update('floor', (event.target.value || null) as FloorType | null)}><option value="">선택</option>{(metadata.commercial_property_types.find((item) => item.code === draft.commercial_property_type)?.floors || []).map((floor) => <option key={floor.code} value={floor.code}>{floor.name}</option>)}</select></label>
+              <label><span>층 구분</span><select value={draft.floor || ''} onChange={(event) => update('floor', (event.target.value || null) as FloorType | null)}><option value="">선택</option>{metadata.rent_floors.map((floor) => <option key={floor.code} value={floor.code}>{floor.name}</option>)}</select></label>
             </div>
           )}
           <small>월 한도와 임대조건을 모두 입력한 경우에만 예산 적합도 20%를 반영합니다. 총 창업예산만 입력하면 순위는 바뀌지 않습니다.</small>

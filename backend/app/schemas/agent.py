@@ -10,7 +10,7 @@ from backend.app.schemas.recommendation import (
     RecommendationRequestSchema,
     RentalEstimateSchema,
 )
-from backend.app.services.cost_provider import FloorType, PropertyType
+from backend.app.services.cost_provider import FloorType
 
 
 class AgentMessage(BaseModel):
@@ -74,14 +74,13 @@ class RecommendationDraft(BaseModel):
     total_startup_budget_krw: float | None = Field(default=None, gt=0)
     monthly_converted_rent_limit_krw: float | None = Field(default=None, gt=0)
     rentable_area_sqm: float | None = Field(default=None, gt=0, le=10_000)
-    commercial_property_type: PropertyType | None = None
     floor: FloorType | None = None
 
     def has_preference(self) -> bool:
         values = self.model_dump(exclude={
             "industry_code", "top_n", "strategy", "total_startup_budget_krw",
             "monthly_converted_rent_limit_krw", "rentable_area_sqm",
-            "commercial_property_type", "floor",
+            "floor",
         }).values()
         return any(bool(value) for value in values)
 

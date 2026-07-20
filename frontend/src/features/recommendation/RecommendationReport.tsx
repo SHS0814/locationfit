@@ -21,7 +21,7 @@ const metricRows: Array<{ key: RecommendationReportMetricKey; label: string; not
 
 const rentMetricRows: Array<{ key: RecommendationReportMetricKey; label: string; note: string }> = [
   { key: 'estimated_converted_monthly_rent_krw', label: '예상 월 환산임대료', note: '입력한 임대면적 기준 · 관리비/VAT 제외' },
-  { key: 'unit_converted_rent_krw_sqm', label: '㎡당 월 환산임대료', note: '한국부동산원 인근 표본상권 기준' },
+  { key: 'unit_converted_rent_krw_sqm', label: '㎡당 월 환산임대료', note: '서울시 행정동 임대시세 기준 · 결측 시 자치구' },
 ]
 
 export function RecommendationReportView({ report }: Props) {
@@ -56,7 +56,7 @@ export function RecommendationReportView({ report }: Props) {
               <p className="report-rent">
                 환산 월 임대료 {Math.round(area.rental_estimate.estimated_converted_monthly_rent_krw).toLocaleString('ko-KR')}원
                 {area.budget_fit_score != null && ` · 예산 적합 ${area.budget_fit_score.toFixed(1)}점`}
-                <small>{area.rental_estimate.survey_area_name} 표본상권 {area.rental_estimate.survey_area_distance_km.toFixed(1)}km · {area.rental_estimate.reference_period}</small>
+                <small>{area.rental_estimate.rent_basis_name} · {area.rental_estimate.rent_basis_geography === 'district' ? '자치구' : '행정동'} 기준 · {floorName(area.rental_estimate.rent_basis_floor)} · {area.rental_estimate.reference_period}{area.rental_estimate.fallback_used ? ' · 전체 층 평균 대체' : ''}{area.rental_estimate.geography_fallback_used ? ' · 자치구 기준 대체' : ''}</small>
               </p>
             )}
             {area.positive_reasons.length > 0 && (
@@ -118,4 +118,8 @@ export function RecommendationReportView({ report }: Props) {
       </footer>
     </section>
   )
+}
+
+function floorName(floor: 'all' | 'f1' | 'non_f1'): string {
+  return floor === 'all' ? '전체 층 평균' : floor === 'f1' ? '1층' : '1층 외'
 }

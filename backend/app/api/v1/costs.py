@@ -17,12 +17,11 @@ def lease_plan(
 ) -> LeasePlanResponse:
     estimate = service.cost_provider.estimate(
         payload.area_code,
-        payload.commercial_property_type,
         payload.floor,
         payload.rentable_area_sqm,
     )
     if estimate is None:
-        raise ValueError("선택한 상권과 임대조건의 한국부동산원 임대료 추정치를 찾을 수 없습니다.")
+        raise ValueError("선택한 상권과 임대조건의 서울시 임대시세 추정치를 찾을 수 없습니다.")
     plan = calculate_lease_plan(
         estimate,
         deposit_krw=payload.deposit_krw,

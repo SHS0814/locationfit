@@ -10,20 +10,14 @@ from typing import Literal, Protocol
 import pandas as pd
 
 
-PropertyType = Literal["small_retail", "medium_large_retail", "strata_retail"]
-FloorType = Literal["b1", "f1", "f2", "f3", "f4", "f5", "f6_plus"]
+FloorType = Literal["all", "f1", "non_f1"]
 
 OBSERVATION_FILE = "commercial_rent_observations.parquet"
-CROSSWALK_FILE = "commercial_rent_crosswalk.parquet"
-SOURCE_NAME = "한국부동산원 R-ONE 상업용부동산 임대동향조사"
-PROPERTY_TYPE_NAMES = {
-    "small_retail": "소규모 상가",
-    "medium_large_retail": "중대형 상가",
-    "strata_retail": "집합 상가",
-}
-FLOOR_NAMES = {
-    "b1": "지하 1층", "f1": "1층", "f2": "2층", "f3": "3층",
-    "f4": "4층", "f5": "5층", "f6_plus": "6층 이상",
+SOURCE_NAME = "서울시 상권분석서비스 임대시세(서울신용보증재단 보증 고객 통계)"
+FLOOR_NAMES: dict[FloorType, str] = {
+    "all": "전체 층 평균",
+    "f1": "1층",
+    "non_f1": "1층 외",
 }
 
 
@@ -47,19 +41,23 @@ class CommercialCostResult:
 
 @dataclass(frozen=True)
 class RentalEstimate:
-    property_type: PropertyType
+    area_code: str
+    area_name: str
+    admin_dong_name: str
+    rent_basis_geography: Literal["admin_dong", "district"]
+    rent_basis_name: str
+    geography_fallback_used: bool
     floor: FloorType
+    rent_basis_floor: FloorType
+    fallback_used: bool
     rentable_area_sqm: float
     unit_converted_rent_krw_sqm: float
     estimated_converted_monthly_rent_krw: float
     annual_conversion_rate: float
     reference_period: str
-    survey_area_name: str
-    survey_area_distance_km: float
-    mapping_method: Literal["nearest_reb_survey_market"]
     source: str = SOURCE_NAME
     disclosure: str = (
-        "인근 한국부동산원 표본상권의 전환임대료를 적용한 추정치이며, "
+        "해당 상권이 속한 행정동의 서울시 환산임대시세를 적용한 추정치이며, "
         "관리비·부가가치세는 포함하지 않습니다."
     )
 
@@ -93,30 +91,15 @@ class CommercialCostProvider(Protocol):
     def estimate(
         self,
         area_code: str,
-        property_type: PropertyType,
         floor: FloorType,
         rentable_area_sqm: float,
     ) -> RentalEstimate | None: ...
 
-    def options(self) -> list[dict[str, object]]: ...
+    def options(self) -> list[dict[str, str]]: ...
 
 
-def _cost_options(observations: pd.DataFrame | None = None) -> list[dict[str, object]]:
-    output: list[dict[str, object]] = []
-    for property_type, name in PROPERTY_TYPE_NAMES.items():
-        available = list(FLOOR_NAMES)
-        if observations is not None:
-            selected = observations.loc[
-                observations["property_type"].astype(str).eq(property_type), "floor"
-            ].dropna().astype(str)
-            available_set = set(selected)
-            available = [floor for floor in FLOOR_NAMES if floor in available_set]
-        output.append({
-            "code": property_type,
-            "name": name,
-            "floors": [{"code": floor, "name": FLOOR_NAMES[floor]} for floor in available],
-        })
-    return output
+def _cost_options() -> list[dict[str, str]]:
+    return [{"code": code, "name": name} for code, name in FLOOR_NAMES.items()]
 
 
 def calculate_budget_fit(monthly_limit_krw: float, estimated_monthly_krw: float) -> float:
@@ -161,73 +144,74 @@ def calculate_lease_plan(
 
 
 class ParquetCommercialCostProvider:
-    """Read-only runtime provider backed by manually refreshed static Parquet files."""
+    """Read-only runtime provider backed by a manually refreshed static Parquet file."""
 
     REQUIRED_OBSERVATION_COLUMNS = {
-        "property_type", "survey_area_name", "floor", "reference_period",
+        "area_code", "area_name", "admin_dong_name", "rent_basis_geography",
+        "rent_basis_name", "floor", "reference_period",
         "unit_converted_rent_krw_sqm", "annual_conversion_rate",
     }
-    REQUIRED_CROSSWALK_COLUMNS = {
-        "area_code", "property_type", "survey_area_name", "distance_km",
-    }
 
-    def __init__(self, observations: pd.DataFrame, crosswalk: pd.DataFrame) -> None:
-        missing_observations = sorted(self.REQUIRED_OBSERVATION_COLUMNS - set(observations.columns))
-        missing_crosswalk = sorted(self.REQUIRED_CROSSWALK_COLUMNS - set(crosswalk.columns))
-        if missing_observations or missing_crosswalk:
-            raise RuntimeError(
-                "상가 비용 아티팩트 스키마가 올바르지 않습니다. "
-                f"observations={missing_observations}, crosswalk={missing_crosswalk}"
-            )
-        if crosswalk.duplicated(["area_code", "property_type"]).any():
-            raise RuntimeError("상가 비용 crosswalk에 area_code/property_type 중복이 있습니다.")
+    def __init__(self, observations: pd.DataFrame) -> None:
+        missing = sorted(self.REQUIRED_OBSERVATION_COLUMNS - set(observations.columns))
+        if missing:
+            raise RuntimeError(f"상가 비용 아티팩트 스키마가 올바르지 않습니다: {missing}")
+        if observations.duplicated(["area_code", "reference_period", "floor"]).any():
+            raise RuntimeError("상가 비용 아티팩트에 area/period/floor 중복이 있습니다.")
+        invalid_floors = set(observations["floor"].dropna().astype(str)) - set(FLOOR_NAMES)
+        if invalid_floors:
+            raise RuntimeError(f"상가 비용 아티팩트의 층 코드가 올바르지 않습니다: {sorted(invalid_floors)}")
         self.observations = observations.copy()
-        self.crosswalk = crosswalk.copy()
-        for frame in (self.observations, self.crosswalk):
-            for column in ("property_type", "survey_area_name"):
-                frame[column] = frame[column].astype(str)
-        self.crosswalk["area_code"] = self.crosswalk["area_code"].astype(str)
+        for column in (
+            "area_code", "area_name", "admin_dong_name", "rent_basis_geography",
+            "rent_basis_name", "floor", "reference_period",
+        ):
+            self.observations[column] = self.observations[column].astype(str)
+        self.latest_period = str(self.observations["reference_period"].max())
 
     @classmethod
     def from_artifact_dir(cls, artifact_dir: Path) -> "ParquetCommercialCostProvider":
         observation_path = artifact_dir / OBSERVATION_FILE
-        crosswalk_path = artifact_dir / CROSSWALK_FILE
-        if not observation_path.exists() or not crosswalk_path.exists():
+        if not observation_path.exists():
             raise FileNotFoundError("상가 비용 Parquet 아티팩트가 없습니다.")
         manifest_path = artifact_dir / "manifest.json"
         if not manifest_path.exists():
             raise RuntimeError("상가 비용 체크섬을 확인할 manifest가 없습니다.")
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        for path in (observation_path, crosswalk_path):
-            expected = manifest.get("files", {}).get(path.name, {}).get("sha256")
-            if not expected:
-                raise RuntimeError(f"상가 비용 manifest 항목이 없습니다: {path.name}")
-            digest = hashlib.sha256(path.read_bytes()).hexdigest()
-            if digest != expected:
-                raise RuntimeError(f"상가 비용 아티팩트 체크섬이 일치하지 않습니다: {path.name}")
-        provider = cls(pd.read_parquet(observation_path), pd.read_parquet(crosswalk_path))
+        expected = manifest.get("files", {}).get(observation_path.name, {}).get("sha256")
+        if not expected:
+            raise RuntimeError(f"상가 비용 manifest 항목이 없습니다: {observation_path.name}")
+        digest = hashlib.sha256(observation_path.read_bytes()).hexdigest()
+        if digest != expected:
+            raise RuntimeError(f"상가 비용 아티팩트 체크섬이 일치하지 않습니다: {observation_path.name}")
+        provider = cls(pd.read_parquet(observation_path))
         index_path = artifact_dir / "area_recommendation_index.parquet"
         if index_path.exists():
             area_count = pd.read_parquet(index_path, columns=["area_code"])["area_code"].nunique()
-            expected_rows = area_count * 3
-            if len(provider.crosswalk) != expected_rows:
+            latest = provider.observations["reference_period"].max()
+            all_count = provider.observations.loc[
+                provider.observations["reference_period"].eq(latest)
+                & provider.observations["floor"].eq("all"),
+                "area_code",
+            ].nunique()
+            if all_count != area_count:
                 raise RuntimeError(
-                    f"상가 비용 매핑 coverage가 부족합니다: expected={expected_rows}, "
-                    f"actual={len(provider.crosswalk)}"
+                    f"상가 비용 전체층 coverage가 부족합니다: expected={area_count}, actual={all_count}"
                 )
         return provider
 
     def get_area_costs(self, area_codes: list[str]) -> CommercialCostResult:
-        selected = self.crosswalk
+        selected = self.observations
         if area_codes:
             selected = selected.loc[selected["area_code"].isin(map(str, area_codes))]
+        latest = self.latest_period
         rows = tuple(
             CommercialCostObservation(
                 area_code=str(row.area_code),
                 monthly_rent_krw=None,
                 deposit_krw=None,
                 unit_area_sqm=None,
-                reference_period=str(self.observations["reference_period"].max()),
+                reference_period=latest,
                 source=SOURCE_NAME,
                 reliability=None,
             )
@@ -235,44 +219,29 @@ class ParquetCommercialCostProvider:
         )
         return CommercialCostResult(availability="available", observations=rows)
 
-    def options(self) -> list[dict[str, object]]:
-        return _cost_options(self.observations)
+    def options(self) -> list[dict[str, str]]:
+        return _cost_options()
 
     def estimate(
         self,
         area_code: str,
-        property_type: PropertyType,
         floor: FloorType,
         rentable_area_sqm: float,
     ) -> RentalEstimate | None:
         if not math.isfinite(rentable_area_sqm) or rentable_area_sqm <= 0:
             raise ValueError("임대면적은 0보다 커야 합니다.")
-        mapping = self.crosswalk.loc[
-            self.crosswalk["area_code"].eq(str(area_code))
-            & self.crosswalk["property_type"].eq(property_type)
-        ]
-        if mapping.empty:
-            return None
-        mapped = mapping.iloc[0]
-        rows = self.observations.loc[
-            self.observations["property_type"].eq(property_type)
-            & self.observations["survey_area_name"].eq(str(mapped["survey_area_name"]))
-        ].copy()
+        if floor not in FLOOR_NAMES:
+            raise ValueError(f"알 수 없는 층 구분입니다: {floor}")
+        rows = self.observations.loc[self.observations["area_code"].eq(str(area_code))].copy()
         if rows.empty:
             return None
         latest = str(rows["reference_period"].max())
-        rows = rows.loc[rows["reference_period"].astype(str).eq(latest)]
-        selected = rows.loc[rows["floor"].astype(str).eq(floor)]
-        if selected.empty and floor != "f1":
-            first = rows.loc[rows["floor"].astype(str).eq("f1")]
-            target_ratio = rows.loc[rows["floor"].astype(str).eq(floor), "floor_utility_ratio"] \
-                if "floor_utility_ratio" in rows else pd.Series(dtype="float64")
-            if not first.empty and not target_ratio.dropna().empty:
-                selected = first.copy()
-                selected["unit_converted_rent_krw_sqm"] = (
-                    float(first.iloc[0]["unit_converted_rent_krw_sqm"])
-                    * float(target_ratio.dropna().iloc[0])
-                )
+        rows = rows.loc[rows["reference_period"].eq(latest)]
+        selected = rows.loc[rows["floor"].eq(floor)]
+        basis_floor: FloorType = floor
+        if selected.empty and floor != "all":
+            selected = rows.loc[rows["floor"].eq("all")]
+            basis_floor = "all"
         if selected.empty:
             return None
         row = selected.iloc[0]
@@ -281,16 +250,27 @@ class ParquetCommercialCostProvider:
         if conversion_rate > 1:
             conversion_rate /= 100.0
         return RentalEstimate(
-            property_type=property_type,
+            area_code=str(row["area_code"]),
+            area_name=str(row["area_name"]),
+            admin_dong_name=str(row["admin_dong_name"]),
+            rent_basis_geography=str(row["rent_basis_geography"]),
+            rent_basis_name=str(row["rent_basis_name"]),
+            geography_fallback_used=str(row["rent_basis_geography"]) == "district",
             floor=floor,
+            rent_basis_floor=basis_floor,
+            fallback_used=basis_floor != floor,
             rentable_area_sqm=round(float(rentable_area_sqm), 4),
             unit_converted_rent_krw_sqm=round(unit_rent, 2),
             estimated_converted_monthly_rent_krw=round(unit_rent * rentable_area_sqm, 2),
             annual_conversion_rate=round(conversion_rate, 6),
             reference_period=latest,
-            survey_area_name=str(mapped["survey_area_name"]),
-            survey_area_distance_km=round(float(mapped["distance_km"]), 3),
-            mapping_method="nearest_reb_survey_market",
+            disclosure=(
+                "해당 상권이 속한 자치구의 서울시 환산임대시세를 적용한 대체 추정치이며, "
+                "관리비·부가가치세는 포함하지 않습니다."
+                if str(row["rent_basis_geography"]) == "district"
+                else "해당 상권이 속한 행정동의 서울시 환산임대시세를 적용한 추정치이며, "
+                "관리비·부가가치세는 포함하지 않습니다."
+            ),
         )
 
 
@@ -300,7 +280,7 @@ class UnavailableCostProvider:
         return CommercialCostResult(
             availability="unavailable",
             reason=(
-                "상가 임대료 정적 산출물이 없습니다. REB_API_KEY를 설정한 뒤 "
+                "서울시 상권분석서비스 임대시세 정적 산출물이 없습니다. "
                 "수동 갱신 스크립트를 실행하면 예산 점수가 활성화됩니다."
             ),
         )
@@ -308,12 +288,11 @@ class UnavailableCostProvider:
     def estimate(
         self,
         area_code: str,
-        property_type: PropertyType,
         floor: FloorType,
         rentable_area_sqm: float,
     ) -> RentalEstimate | None:
-        del area_code, property_type, floor, rentable_area_sqm
+        del area_code, floor, rentable_area_sqm
         return None
 
-    def options(self) -> list[dict[str, object]]:
+    def options(self) -> list[dict[str, str]]:
         return _cost_options()

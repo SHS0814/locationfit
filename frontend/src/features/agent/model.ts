@@ -14,7 +14,8 @@ import type {
   TradeoffInsight,
 } from '../../types/api'
 
-export const AGENT_SESSION_KEY = 'kb-location-agent-session-v5'
+export const AGENT_SESSION_KEY = 'kb-location-agent-session-v6'
+export const AGENT_V5_SESSION_KEY = 'kb-location-agent-session-v5'
 export const AGENT_V4_SESSION_KEY = 'kb-location-agent-session-v4'
 export const AGENT_V3_SESSION_KEY = 'kb-location-agent-session-v3'
 export const AGENT_V2_SESSION_KEY = 'kb-location-agent-session-v2'
@@ -46,7 +47,6 @@ export const emptyDraft: RecommendationDraft = {
   total_startup_budget_krw: null,
   monthly_converted_rent_limit_krw: null,
   rentable_area_sqm: null,
-  commercial_property_type: null,
   floor: null,
 }
 
@@ -67,7 +67,7 @@ export const initialMessages: AgentMessage[] = [{
 }]
 
 export interface AgentSession {
-  schemaVersion: 5
+  schemaVersion: 6
   history: AgentMessage[]
   draft: RecommendationDraft
   phase: AgentPhase
@@ -87,7 +87,7 @@ export interface AgentSession {
 }
 
 export const initialSession: AgentSession = {
-  schemaVersion: 5,
+  schemaVersion: 6,
   history: initialMessages,
   draft: emptyDraft,
   phase: 'discovering',
@@ -108,13 +108,13 @@ export const initialSession: AgentSession = {
 
 export function hasDraftPreference(draft: RecommendationDraft): boolean {
   return Object.entries(draft).some(([key, value]) => {
-    if (['industry_code', 'top_n', 'strategy', 'total_startup_budget_krw', 'monthly_converted_rent_limit_krw', 'rentable_area_sqm', 'commercial_property_type', 'floor'].includes(key)) return false
+    if (['industry_code', 'top_n', 'strategy', 'total_startup_budget_krw', 'monthly_converted_rent_limit_krw', 'rentable_area_sqm', 'floor'].includes(key)) return false
     return Array.isArray(value) ? value.length > 0 : Boolean(value)
   })
 }
 
 export function isDraftReady(draft: RecommendationDraft): boolean {
-  const rentFields = [draft.rentable_area_sqm, draft.commercial_property_type, draft.floor]
+  const rentFields = [draft.rentable_area_sqm, draft.floor]
   const hasAnyRentField = rentFields.some((value) => value != null)
   const hasAllRentFields = rentFields.every((value) => value != null)
   const rentReady = (!hasAnyRentField || hasAllRentFields)
@@ -149,18 +149,24 @@ export function restoreSession(raw: string | null): AgentSession {
   try {
     const parsed = JSON.parse(raw) as Partial<AgentSession>
     if (!Array.isArray(parsed.history) || !parsed.draft || !parsed.phase) return initialSession
-    const restoredItems = Array.isArray(parsed.items) && parsed.items.every(hasAreaBoundary)
+    const currentSchema = parsed.schemaVersion === 6
+    const legacyDraft = parsed.draft as Partial<RecommendationDraft> & { commercial_property_type?: unknown; floor?: string | null }
+    const { commercial_property_type: _removedPropertyType, ...draftValues } = legacyDraft
+    const floor = legacyDraft.floor && ['all', 'f1', 'non_f1'].includes(legacyDraft.floor)
+      ? legacyDraft.floor as RecommendationDraft['floor']
+      : null
+    const restoredItems = currentSchema && Array.isArray(parsed.items) && parsed.items.every(hasAreaBoundary)
       ? parsed.items
       : []
     return {
-      schemaVersion: 5,
+      schemaVersion: 6,
       history: parsed.history.slice(-20),
-      draft: { ...emptyDraft, ...parsed.draft },
-      phase: parsed.phase === ('gathering' as AgentPhase) ? 'discovering' : parsed.phase,
+      draft: { ...emptyDraft, ...draftValues, floor },
+      phase: !currentSchema || parsed.phase === ('gathering' as AgentPhase) ? 'discovering' : parsed.phase,
       context: { ...emptyContext, ...parsed.context },
       assumptions: Array.isArray(parsed.assumptions) ? parsed.assumptions : [],
       explorationSummary: parsed.explorationSummary || {},
-      scenarios: Array.isArray(parsed.scenarios) ? parsed.scenarios : [],
+      scenarios: currentSchema && Array.isArray(parsed.scenarios) ? parsed.scenarios : [],
       tradeoffs: Array.isArray(parsed.tradeoffs) ? parsed.tradeoffs : [],
       relaxationOptions: Array.isArray(parsed.relaxationOptions) ? parsed.relaxationOptions : [],
       dataGaps: Array.isArray(parsed.dataGaps) ? parsed.dataGaps : [],
@@ -168,8 +174,8 @@ export function restoreSession(raw: string | null): AgentSession {
       analysisRevision: Number(parsed.analysisRevision || 0),
       items: restoredItems,
       comparison: Array.isArray(parsed.comparison) ? parsed.comparison : [],
-      recommendationReport: parsed.recommendationReport || null,
-      activeRequest: parsed.activeRequest || null,
+      recommendationReport: currentSchema ? parsed.recommendationReport || null : null,
+      activeRequest: currentSchema ? parsed.activeRequest || null : null,
     }
   } catch {
     return initialSession

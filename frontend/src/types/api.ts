@@ -11,7 +11,7 @@ export interface MetadataResponse {
   area_types: MetadataOption[]
   age_groups: MetadataOption[]
   time_bands: MetadataOption[]
-  commercial_property_types: Array<MetadataOption & { floors: MetadataOption[] }>
+  rent_floors: MetadataOption[]
 }
 
 export interface RecommendationRequest {
@@ -40,24 +40,26 @@ export interface RecommendationRequest {
   total_startup_budget_krw: number | null
   monthly_converted_rent_limit_krw: number | null
   rentable_area_sqm: number | null
-  commercial_property_type: PropertyType | null
   floor: FloorType | null
 }
 
-export type PropertyType = 'small_retail' | 'medium_large_retail' | 'strata_retail'
-export type FloorType = 'b1' | 'f1' | 'f2' | 'f3' | 'f4' | 'f5' | 'f6_plus'
+export type FloorType = 'all' | 'f1' | 'non_f1'
 
 export interface RentalEstimate {
-  property_type: PropertyType
+  area_code: string
+  area_name: string
+  admin_dong_name: string
+  rent_basis_geography: 'admin_dong' | 'district'
+  rent_basis_name: string
+  geography_fallback_used: boolean
   floor: FloorType
+  rent_basis_floor: FloorType
+  fallback_used: boolean
   rentable_area_sqm: number
   unit_converted_rent_krw_sqm: number
   estimated_converted_monthly_rent_krw: number
   annual_conversion_rate: number
   reference_period: string
-  survey_area_name: string
-  survey_area_distance_km: number
-  mapping_method: 'nearest_reb_survey_market'
   source: string
   disclosure: string
 }
@@ -105,7 +107,6 @@ export interface RecommendationItem {
 
 export interface LeasePlanRequest {
   area_code: string
-  commercial_property_type: PropertyType
   floor: FloorType
   rentable_area_sqm: number
   deposit_krw: number | null
