@@ -15,6 +15,12 @@ from backend.app.services.cost_provider import (
     UnavailableCostProvider,
     calculate_budget_fit,
 )
+from backend.app.services.market_lookup_service import (
+    LookupGroup,
+    LookupMetric,
+    LookupOrder,
+    MarketLookupService,
+)
 from backend.recommender import AreaRecommender, RecommendationRequest
 from src.models.area_recommender import RecommendationResult
 
@@ -80,6 +86,11 @@ class RecommenderService:
         self.boundaries = bundle.boundaries
         self.engine = AreaRecommender(self.index, self.evidence)
         self.cost_provider = cost_provider or UnavailableCostProvider()
+        self.market_lookup = MarketLookupService(
+            self.index,
+            self.evidence,
+            self.manifest.get("data_period", {}),
+        )
         self.location_lookup = self.index.set_index("area_code")[
             ["latitude", "longitude", "admin_dong_name", "area_size_sqm"]
         ].to_dict(orient="index")
@@ -115,6 +126,27 @@ class RecommenderService:
             "time_bands": TIME_OPTIONS,
             "commercial_property_types": self.cost_provider.options(),
         }
+
+    def lookup_market_rankings(
+        self,
+        *,
+        group_by: LookupGroup,
+        metric: LookupMetric,
+        top_n: int = 10,
+        order: LookupOrder = "desc",
+        district_name: str | None = None,
+        admin_dong_name: str | None = None,
+        industry_code: str | None = None,
+    ) -> dict[str, Any]:
+        return self.market_lookup.rank(
+            group_by=group_by,
+            metric=metric,
+            top_n=top_n,
+            order=order,
+            district_name=district_name,
+            admin_dong_name=admin_dong_name,
+            industry_code=industry_code,
+        )
 
     def _run_recommendation(self, payload: RecommendationRequestSchema) -> RecommendationResult:
         values = payload.model_dump(exclude={

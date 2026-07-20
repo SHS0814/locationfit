@@ -32,6 +32,9 @@ npm run dev
 AI 상담을 사용하려면 저장소 루트의 `.env.example`을 참고해 서버 실행 환경에 `OPENAI_API_KEY`를 설정한다. 기본 모델은 `gpt-5.4-mini`이며 `OPENAI_MODEL`로 변경할 수 있다. API 키가 없거나 OpenAI API가 일시적으로 실패하면 기존 추천 데이터와 API는 정상 동작하지만 대화형 상담은 재시도 오류를 반환한다.
 
 대화와 추천 상태는 브라우저 탭의 `sessionStorage`에만 저장된다. 서버는 대화 원문을 저장하지 않고 Agents SDK 추적과 OpenAI 응답 저장을 비활성화한다.
+
+대화창은 추천 상담과 별도로 결정론적 상권 통계 조회를 지원한다. 상권·업종·자치구·행정동을 최근 매출, 폐업률, 개업률, 매출 성장률, 점포 수·밀도, 유동·상주·직장인구 기준으로 Top 1~50 오름차순/내림차순 조회할 수 있다. 결과에는 필터 적용 후 전체 조회 대상의 평균·중앙값·모집단 표준편차와 각 순위 값의 평균/중앙값 대비 차이·표준편차 거리도 포함한다. 예: `매출 높은 상권 5곳`, `가장 매출 높은 업종 10개`, `강남구 역삼1동에서 폐업률 높은 업종 5개`. 동 단위는 원천 데이터의 상권별 대표 행정동 기준이며 법정동 경계 집계가 아니다.
+
 서비스 아티팩트를 다시 만들려면 저장소 루트에서 아래 명령을 실행한다.
 
 ```bash
@@ -57,6 +60,14 @@ PYTHONPATH=. .venv/bin/python scripts/refresh_reb_commercial_rent.py
 ```
 
 갱신 결과는 `backend/artifacts/current/commercial_rent_observations.parquet`와 `commercial_rent_crosswalk.parquet`이며 `manifest.json`에 행 수·체크섬·기준 분기가 추가된다. 원본 응답은 `data/raw/reb_commercial_rent/<UTC시각>/`에 키 없이 원자적으로 저장된다. `REB_API_KEY`는 갱신 프로세스에서만 사용하고 파일이나 로그에 기록하지 않는다. 스케줄러는 없으며 분기 발표 후 위 명령을 수동 실행한다.
+
+공식 R-ONE WFS의 서울 표본상권 경계를 내려받아 기존 1,650개 상권의 중심점 포함 여부, 실제 Polygon 면적 교차율, 현재 최근접 매핑을 비교하려면 아래 명령을 실행한다. 이 조회에는 API 키가 필요 없다.
+
+```bash
+PYTHONPATH=. .venv/bin/python scripts/compare_reb_boundaries.py
+```
+
+원본 경계는 `data/raw/reb_commercial_boundaries/<UTC시각>/`, 행별 비교와 요약은 각각 `outputs/tables/reb_boundary_mapping_comparison.parquet`, `reb_boundary_mapping_summary.json`에 저장된다. 현재 R-ONE WFS의 최신 경계는 2024년판이고 사이트가 표본 재설계에 따른 경계 변경 작업 중임을 안내하므로, 2026년 1분기 임대료 매핑의 확정 경계가 아니라 커버리지 진단 자료로 사용한다. 면적 교차율은 두 경계를 EPSG:5179로 투영해 계산한다.
 
 표시되는 임대료는 임대면적(전용+공용)에 대한 월 환산임대료 추정치다. 관리비와 부가가치세는 제외한다. 결과 화면에서 보증금을 입력하면 `max(0, 환산 월 임대료 - 보증금 × 연 전환율 ÷ 12)`로 현금 월세와 첫해 현금 지출을 계산하고, 반환 가능한 보증금은 별도로 표시한다.
 

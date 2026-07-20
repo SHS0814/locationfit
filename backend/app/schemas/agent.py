@@ -169,6 +169,58 @@ class DataGap(BaseModel):
     message: str
 
 
+class MarketLookupRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rank: int = Field(ge=1)
+    entity_code: str | None = None
+    entity_name: str
+    metric_value: float
+    metric_display_value: str
+    difference_from_mean: float
+    difference_from_mean_display: str
+    difference_from_median: float
+    difference_from_median_display: str
+    standard_deviation_distance: float
+    district_name: str | None = None
+    admin_dong_name: str | None = None
+    area_count: int = Field(ge=1)
+    observation_count: int = Field(ge=1)
+
+
+class MarketLookupDistribution(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    population_count: int = Field(ge=1)
+    mean: float
+    mean_display: str
+    median: float
+    median_display: str
+    standard_deviation: float = Field(ge=0)
+    standard_deviation_display: str
+
+
+class MarketLookupResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    group_by: Literal["area", "industry", "district", "admin_dong"]
+    metric: Literal[
+        "sales", "closing_rate", "opening_rate", "growth_rate",
+        "store_count", "store_density", "floating_population",
+        "resident_population", "worker_population",
+    ]
+    metric_label: str
+    metric_unit: Literal["krw", "ratio", "count", "count_per_sqkm", "people"]
+    order: Literal["desc", "asc"]
+    filters: dict[str, str] = Field(default_factory=dict)
+    data_period: str
+    distribution: MarketLookupDistribution
+    rows: list[MarketLookupRow]
+    geographic_basis: str
+    disclosure: str
+
+
 class AreaComparison(BaseModel):
     area_code: str
     area_name: str
@@ -265,3 +317,4 @@ class AgentTurnResponse(BaseModel):
     diagnostics: dict[str, object] = Field(default_factory=dict)
     comparison: list[AreaComparison] = Field(default_factory=list)
     recommendation_report: RecommendationReport | None = None
+    market_lookup: MarketLookupResult | None = None

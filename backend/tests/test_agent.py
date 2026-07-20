@@ -75,6 +75,24 @@ class IncompleteRunner:
         ))
 
 
+class MarketLookupRunner:
+    async def run(self, payload, recommender, metadata) -> AgentExecution:
+        lookup = recommender.lookup_market_rankings(
+            group_by="industry",
+            metric="closing_rate",
+            top_n=5,
+            district_name="강남구",
+            admin_dong_name="역삼1동",
+        )
+        return AgentExecution(
+            AgentDecision(
+                assistant_message="역삼1동의 폐업률 상위 업종을 조회했습니다. 행정동 기준입니다.",
+                draft=RecommendationDraft(industry_code="not-a-real-code"),
+            ),
+            market_lookup=lookup,
+        )
+
+
 def test_agent_explores_three_scenarios_without_final_recommendation() -> None:
     runner = ReadyRunner()
     service = LocationAgentService(
@@ -246,3 +264,39 @@ def test_compare_is_limited_to_current_recommendations() -> None:
 
     with pytest.raises(ValueError, match="현재 추천 결과"):
         recommender.compare(["not-a-result"], request.industry_code, allowed_area_codes=allowed)
+
+
+def test_market_lookup_bypasses_recommendation_discovery_and_preserves_state() -> None:
+    service = LocationAgentService(
+        RecommenderService(ARTIFACT_DIR), MarketLookupRunner(), timeout_seconds=1,
+    )
+    original_draft = RecommendationDraft(industry_code="CS100001", preferred_districts=["강남구"])
+    result = asyncio.run(service.turn(AgentTurnRequest(
+        message="강남구 역삼1동에서 폐업률 높은 업종 5개 알려줘",
+        draft=original_draft,
+    )))
+
+    assert result["phase"] == "discovering"
+    assert result["draft"] == original_draft
+    assert result["market_lookup"]["metric"] == "closing_rate"
+    assert len(result["market_lookup"]["rows"]) == 5
+    assert result["recommendations"] == []
+
+
+def test_market_lookup_api_contract() -> None:
+    with TestClient(app) as client:
+        app.state.location_agent = LocationAgentService(
+            app.state.recommender, MarketLookupRunner(), timeout_seconds=1,
+        )
+        response = client.post("/api/v1/agent/turns", json={
+            "message": "강남구 역삼1동에서 폐업률 높은 업종 5개 알려줘",
+            "draft": {},
+        })
+
+        assert response.status_code == 200
+        lookup = response.json()["market_lookup"]
+        assert lookup["group_by"] == "industry"
+        assert lookup["metric"] == "closing_rate"
+        assert lookup["distribution"]["population_count"] >= len(lookup["rows"])
+        assert lookup["distribution"]["mean_display"].endswith("%")
+        assert lookup["rows"][0]["metric_display_value"].endswith("%")

@@ -261,12 +261,22 @@ def main() -> None:
                 role: json.loads((raw_target / f"{property_type}_{role}.json").read_text(encoding="utf-8"))
                 for role in ("regional_rent", "floor_rent", "conversion_rate")
             }
-        gis_rows = {
-            property_type: json.loads(
-                (raw_target / f"{property_type}_gis_centers.json").read_text(encoding="utf-8")
+        all_gis_rows = [
+            row
+            for source_type in config["property_types"]
+            for row in json.loads(
+                (raw_target / f"{source_type}_gis_centers.json").read_text(encoding="utf-8")
             )
-            for property_type in config["property_types"]
+        ]
+        gis_rows = {
+            property_type: [
+                row for row in all_gis_rows
+                if str(row.get("buldGbn")) == str(item["gis_building_code"])
+            ]
+            for property_type, item in config["property_types"].items()
         }
+        if any(not rows for rows in gis_rows.values()):
+            raise ValueError("원본 GIS 중심점에 설정된 상가 유형 코드가 없습니다.")
     else:
         api_key = os.getenv("REB_API_KEY", "").strip()
         if not api_key:

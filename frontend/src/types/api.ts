@@ -208,6 +208,48 @@ export interface DataGap {
   message: string
 }
 
+export interface MarketLookupRow {
+  rank: number
+  entity_code: string | null
+  entity_name: string
+  metric_value: number
+  metric_display_value: string
+  difference_from_mean: number
+  difference_from_mean_display: string
+  difference_from_median: number
+  difference_from_median_display: string
+  standard_deviation_distance: number
+  district_name: string | null
+  admin_dong_name: string | null
+  area_count: number
+  observation_count: number
+}
+
+export interface MarketLookupDistribution {
+  population_count: number
+  mean: number
+  mean_display: string
+  median: number
+  median_display: string
+  standard_deviation: number
+  standard_deviation_display: string
+}
+
+export interface MarketLookupResult {
+  title: string
+  group_by: 'area' | 'industry' | 'district' | 'admin_dong'
+  metric: 'sales' | 'closing_rate' | 'opening_rate' | 'growth_rate' | 'store_count' | 'store_density' | 'floating_population' | 'resident_population' | 'worker_population'
+  metric_label: string
+  metric_unit: 'krw' | 'ratio' | 'count' | 'count_per_sqkm' | 'people'
+  order: 'desc' | 'asc'
+  filters: Record<string, string>
+  data_period: string
+  distribution: MarketLookupDistribution
+  rows: MarketLookupRow[]
+  geographic_basis: string
+  disclosure: string
+}
+
 export interface AreaComparison {
   area_code: string
   area_name: string
@@ -313,4 +355,5 @@ export interface AgentTurnResponse {
   diagnostics: Record<string, unknown>
   comparison: AreaComparison[]
   recommendation_report: RecommendationReport | null
+  market_lookup: MarketLookupResult | null
 }

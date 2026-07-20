@@ -165,3 +165,19 @@ class RebGisClient:
         if not isinstance(rows, list):
             raise RebApiError("REB GIS 응답 형식이 올바르지 않습니다.")
         return rows
+
+    def fetch_seoul_boundaries(self) -> dict[str, Any]:
+        body = urlencode({"CQL_FILTER": "sidocode='11'"}).encode("utf-8")
+        request = Request(
+            self.base_url,
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+        )
+        payload = self.open_json(request, self.timeout)
+        if (
+            payload.get("type") != "FeatureCollection"
+            or not isinstance(payload.get("features"), list)
+            or not payload["features"]
+        ):
+            raise RebApiError("REB 상권 경계 응답 형식이 올바르지 않습니다.")
+        return payload

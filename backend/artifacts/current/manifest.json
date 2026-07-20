@@ -34,7 +34,7 @@
     },
     "commercial_rent_crosswalk.parquet": {
       "rows": 4950,
-      "sha256": "de1eec0b27b7e666b3266796ceb849bec2c35a36c0fc14ede9127d925c1c8337"
+      "sha256": "4abec10aed76ed9d53160d84955689093b39614dd7d299746b74277dc8f3a1b3"
     }
   },
   "commercial_rent_source": "한국부동산원 R-ONE 상업용부동산 임대동향조사"

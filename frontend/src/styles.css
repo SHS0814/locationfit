@@ -110,6 +110,22 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
 .chat-message.user p { grid-column: 1; grid-row: 1; border-color: #ead58a; border-radius: 12px 2px 12px 12px; background: #fffbed; }
 .chat-message.pending p { color: #8a877f; animation: pulse 1.2s ease-in-out infinite; }
 .chat-composer { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 14px 18px; border-top: 1px solid #e6e3db; border-bottom: 1px solid #e6e3db; }
+.lookup-card { margin: 16px 18px; padding: 16px; border: 1px solid #e3d080; border-left: 4px solid #ffcc00; background: #fffdf4; }
+.lookup-card h3 { margin: 8px 0 12px; font-size: 14px; }
+.lookup-card .lookup-filters { margin: -6px 0 10px; color: #746d58; font-size: 9px; }
+.lookup-distribution { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 0; }
+.lookup-distribution div { min-width: 0; padding: 8px; background: #f3efd9; }
+.lookup-distribution dt { color: #7c755f; font-size: 8px; }
+.lookup-distribution dd { overflow: hidden; margin: 3px 0 0; text-overflow: ellipsis; white-space: nowrap; font: 700 9px 'DM Sans'; }
+.lookup-card .lookup-population { margin: 6px 0 10px; color: #8a8471; font-size: 8px; text-align: right; }
+.lookup-card ol { max-height: 320px; margin: 0 0 12px; padding: 0; overflow-y: auto; list-style: none; }
+.lookup-card li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid #eee7ca; }
+.lookup-card li > b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #ffcc00; font: 700 10px 'DM Sans'; }
+.lookup-card li span { min-width: 0; }
+.lookup-card li strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.lookup-card li small { display: block; color: #8a8471; font-size: 8px; }
+.lookup-card li em { font: 700 10px 'DM Sans'; font-style: normal; color: #275c46; white-space: nowrap; }
+.lookup-card > small { display: block; color: #898273; font-size: 8px; line-height: 1.55; }
 .chat-composer textarea { width: 100%; resize: none; padding: 9px 10px; border: 1px solid #d8d6cf; border-radius: 4px; color: #262622; background: #fff; font-size: 12px; line-height: 1.5; }
 .chat-composer button { min-width: 58px; border: 0; border-radius: 4px; background: #26322c; color: #ffcf19; font-size: 12px; font-weight: 700; }
 .chat-composer button:disabled { opacity: .45; cursor: default; }

@@ -80,37 +80,40 @@ export default function App() {
         throw new Error('상권 경계 데이터를 받지 못했습니다. API 서버를 재시작해주세요.')
       }
       const keepActiveResults = response.phase === 'results'
+      const isMarketLookup = Boolean(response.market_lookup)
+      const preserveAnalysis = keepActiveResults || isMarketLookup
       const items = response.recommendations.length
         ? response.recommendations
-        : keepActiveResults ? session.items : []
+        : preserveAnalysis ? session.items : []
       const activeRequest = response.recommendations.length
         ? draftToRequest(response.draft)
-        : keepActiveResults ? session.activeRequest : null
+        : preserveAnalysis ? session.activeRequest : null
       const nextSession: AgentSession = {
         schemaVersion: 5,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
         draft: response.draft,
-        phase: response.phase,
+        phase: isMarketLookup ? session.phase : response.phase,
         context: response.context,
         assumptions: response.assumptions,
-        explorationSummary: response.exploration_summary,
-        scenarios: response.scenarios.length ? response.scenarios : keepActiveResults ? session.scenarios : [],
-        tradeoffs: response.tradeoffs.length ? response.tradeoffs : keepActiveResults ? session.tradeoffs : [],
-        relaxationOptions: response.relaxation_options.length ? response.relaxation_options : keepActiveResults ? session.relaxationOptions : [],
+        explorationSummary: isMarketLookup ? session.explorationSummary : response.exploration_summary,
+        scenarios: response.scenarios.length ? response.scenarios : preserveAnalysis ? session.scenarios : [],
+        tradeoffs: response.tradeoffs.length ? response.tradeoffs : preserveAnalysis ? session.tradeoffs : [],
+        relaxationOptions: response.relaxation_options.length ? response.relaxation_options : preserveAnalysis ? session.relaxationOptions : [],
         dataGaps: response.data_gaps,
-        selectedScenarioId: response.selected_scenario_id,
-        analysisRevision: response.analysis_revision,
+        selectedScenarioId: isMarketLookup ? session.selectedScenarioId : response.selected_scenario_id,
+        analysisRevision: isMarketLookup ? session.analysisRevision : response.analysis_revision,
         items,
         comparison: response.comparison.length
           ? response.comparison
-          : keepActiveResults ? session.comparison : [],
+          : preserveAnalysis ? session.comparison : [],
         recommendationReport: response.recommendation_report
-          || (keepActiveResults ? session.recommendationReport : null),
+          || (preserveAnalysis ? session.recommendationReport : null),
         activeRequest,
+        marketLookup: response.market_lookup || null,
       }
       setSession(nextSession)
       if (response.recommendations.length) setSelected(response.recommendations[0] || null)
-      else if (!keepActiveResults) setSelected(null)
+      else if (!preserveAnalysis) setSelected(null)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'AI 상담 요청에 실패했습니다.')
     } finally {
@@ -172,7 +175,7 @@ export default function App() {
           : current.context
       return {
         ...current, assumptions, draft, context, phase: 'discovering', scenarios: [], tradeoffs: [],
-        relaxationOptions: [], selectedScenarioId: null, items: [], comparison: [], recommendationReport: null, activeRequest: null,
+        relaxationOptions: [], selectedScenarioId: null, items: [], comparison: [], recommendationReport: null, activeRequest: null, marketLookup: null,
       }
     })
   }
@@ -209,6 +212,7 @@ export default function App() {
       comparison: [],
       recommendationReport: null,
       activeRequest: null,
+      marketLookup: null,
     }))
   }
 
@@ -265,6 +269,7 @@ export default function App() {
             dataGaps={session.dataGaps}
             selectedScenarioId={session.selectedScenarioId}
             comparison={session.comparison}
+            marketLookup={session.marketLookup}
             loading={loading}
             onSend={sendMessage}
             onConfirm={confirm}

@@ -5,6 +5,7 @@ import type {
   AreaComparison,
   DataGap,
   FounderContext,
+  MarketLookupResult,
   RecommendationDraft,
   RecommendationItem,
   RecommendationReport,
@@ -63,7 +64,7 @@ export const emptyContext: FounderContext = {
 
 export const initialMessages: AgentMessage[] = [{
   role: 'assistant',
-  content: '어떤 가게를 어디에 열고 싶으신가요? 업종과 원하는 고객이나 지역을 편하게 말씀해주세요.',
+  content: '입지를 추천받거나 상권 통계를 바로 조회할 수 있어요. 원하는 가게 조건이나 “매출 높은 상권 5곳”처럼 편하게 말씀해주세요.',
 }]
 
 export interface AgentSession {
@@ -84,6 +85,7 @@ export interface AgentSession {
   comparison: AreaComparison[]
   recommendationReport: RecommendationReport | null
   activeRequest: RecommendationRequest | null
+  marketLookup: MarketLookupResult | null
 }
 
 export const initialSession: AgentSession = {
@@ -104,6 +106,7 @@ export const initialSession: AgentSession = {
   comparison: [],
   recommendationReport: null,
   activeRequest: null,
+  marketLookup: null,
 }
 
 export function hasDraftPreference(draft: RecommendationDraft): boolean {
@@ -170,6 +173,7 @@ export function restoreSession(raw: string | null): AgentSession {
       comparison: Array.isArray(parsed.comparison) ? parsed.comparison : [],
       recommendationReport: parsed.recommendationReport || null,
       activeRequest: parsed.activeRequest || null,
+      marketLookup: parsed.marketLookup || null,
     }
   } catch {
     return initialSession

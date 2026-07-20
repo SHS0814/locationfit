@@ -5,7 +5,7 @@
   "property_types": {
     "small_retail": {
       "name": "소규모 상가",
-      "gis_building_code": "3",
+      "gis_building_code": "4",
       "regional_rent_table": "T248223134698125",
       "floor_rent_table": "T246233134891629",
       "conversion_rate_table": "T246253134905233"
@@ -19,7 +19,7 @@
     },
     "strata_retail": {
       "name": "집합 상가",
-      "gis_building_code": "4",
+      "gis_building_code": "3",
       "regional_rent_table": "T244913134948657",
       "floor_rent_table": "T249023134703697",
       "conversion_rate_table": "T243133134985812"

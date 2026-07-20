@@ -4,7 +4,7 @@ from urllib.error import URLError
 
 import pytest
 
-from src.data.reb_api import RebApiError, RebOpenApiClient
+from src.data.reb_api import RebApiError, RebGisClient, RebOpenApiClient
 
 
 def response(total: int, rows: list[dict]) -> dict:
@@ -61,3 +61,38 @@ def test_reb_client_rejects_error_and_incomplete_response() -> None:
     )
     with pytest.raises(RebApiError, match="전체 행"):
         incomplete_client.fetch_table("TABLE")
+
+
+def test_reb_gis_client_posts_seoul_filter_and_returns_boundaries() -> None:
+    requests = []
+    payload = {
+        "type": "FeatureCollection",
+        "features": [{"properties": {"year": "2024", "cname": "테스트상권"}}],
+    }
+
+    def opener(request, timeout):
+        del timeout
+        requests.append(request)
+        return payload
+
+    client = RebGisClient(base_url="https://example.test/wfs", open_json=opener)
+    assert client.fetch_seoul_boundaries() == payload
+    assert requests[0].get_method() == "POST"
+    assert requests[0].data == b"CQL_FILTER=sidocode%3D%2711%27"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"type": "FeatureCollection", "features": "not-a-list"},
+        {"type": "FeatureCollection", "features": []},
+    ],
+)
+def test_reb_gis_client_rejects_invalid_boundary_response(payload: dict) -> None:
+    client = RebGisClient(
+        base_url="https://example.test/wfs",
+        open_json=lambda request, timeout: payload,
+    )
+    with pytest.raises(RebApiError, match="경계 응답"):
+        client.fetch_seoul_boundaries()

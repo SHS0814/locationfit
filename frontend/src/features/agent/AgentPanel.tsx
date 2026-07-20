@@ -6,6 +6,7 @@ import type {
   AreaComparison,
   DataGap,
   FounderContext,
+  MarketLookupResult,
   MetadataResponse,
   RecommendationDraft,
   RelaxationOption,
@@ -30,6 +31,7 @@ interface Props {
   dataGaps: DataGap[]
   selectedScenarioId: 'condition_fit' | 'growth' | 'stability' | null
   comparison: AreaComparison[]
+  marketLookup: MarketLookupResult | null
   loading: boolean
   onSend: (message: string) => void
   onConfirm: () => void
@@ -55,7 +57,7 @@ const importanceFields: Array<{ key: keyof RecommendationDraft; label: string }>
 
 export function AgentPanel({
   metadata, history, draft, phase, context, assumptions, explorationSummary, scenarios,
-  tradeoffs, relaxationOptions, dataGaps, selectedScenarioId, comparison, loading,
+  tradeoffs, relaxationOptions, dataGaps, selectedScenarioId, comparison, marketLookup, loading,
   onSend, onConfirm, onSelectScenario, onApplyRelaxation, onAssumptionStatus, onDraftChange,
   onReset,
 }: Props) {
@@ -81,8 +83,8 @@ export function AgentPanel({
             대화·분석 초기화
           </button>
         </div>
-        <h2>창업 조건을 함께 정리해요</h2>
-        <p>AI는 조건을 해석하고, 점수와 순위는 검증된 추천 엔진이 계산합니다.</p>
+        <h2>추천도, 상권 조회도 대화로</h2>
+        <p>입지 조건은 함께 정리하고, 매출·폐업률 같은 통계는 바로 조회합니다.</p>
       </div>
 
       <div className="chat-log" aria-live="polite">
@@ -103,11 +105,48 @@ export function AgentPanel({
           maxLength={2000}
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          placeholder="예: 강남에서 20대 대상 카페를 열고 싶어요"
+          placeholder="예: 매출 높은 상권 5곳 알려줘"
           disabled={loading}
         />
         <button type="submit" disabled={loading || !message.trim()}>보내기</button>
       </form>
+
+      {marketLookup && (
+        <section className="lookup-card" aria-label="상권 통계 조회 결과">
+          <div className="section-title">
+            <span>바로 조회</span>
+            <small>{marketLookup.data_period}</small>
+          </div>
+          <h3>{marketLookup.title}</h3>
+          {Object.keys(marketLookup.filters).length > 0 && (
+            <p className="lookup-filters">조회 조건 · {Object.values(marketLookup.filters).filter((value, index, values) => values.indexOf(value) === index).join(' · ')}</p>
+          )}
+          <dl className="lookup-distribution">
+            <div><dt>평균</dt><dd>{marketLookup.distribution.mean_display}</dd></div>
+            <div><dt>중앙값</dt><dd>{marketLookup.distribution.median_display}</dd></div>
+            <div><dt>표준편차</dt><dd>{marketLookup.distribution.standard_deviation_display}</dd></div>
+          </dl>
+          <p className="lookup-population">필터 적용 후 전체 {marketLookup.distribution.population_count.toLocaleString('ko-KR')}개 대상 기준</p>
+          <ol>
+            {marketLookup.rows.map((row) => (
+              <li key={`${row.rank}-${row.entity_code || row.entity_name}-${row.district_name || ''}`}>
+                <b>{row.rank}</b>
+                <span>
+                  <strong>{row.entity_name}</strong>
+                  <small>{[
+                    row.district_name,
+                    row.admin_dong_name,
+                    row.area_count > 1 ? `관측 상권 ${row.area_count}곳` : null,
+                  ].filter(Boolean).join(' · ')}</small>
+                  <small>평균 대비 {row.difference_from_mean_display} · 중앙값 대비 {row.difference_from_median_display} · {formatSigma(row.standard_deviation_distance)}</small>
+                </span>
+                <em>{row.metric_display_value}</em>
+              </li>
+            ))}
+          </ol>
+          <small>{marketLookup.disclosure}</small>
+        </section>
+      )}
 
       {(context.business_description || context.target_customer || context.operating_pattern || assumptions.length > 0) && (
         <section className="context-card" aria-label="창업 맥락과 가정">
@@ -306,6 +345,11 @@ function formatPercent(value: number | null): string {
 
 function formatStoreCount(value: number | null): string {
   return value == null ? '-' : `${Math.round(value).toLocaleString('ko-KR')}개`
+}
+
+function formatSigma(value: number): string {
+  const sign = value > 0 ? '+' : ''
+  return `평균에서 ${sign}${value.toFixed(2)}σ`
 }
 
 function formatStoreDensity(value: number | null): string {
