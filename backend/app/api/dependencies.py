@@ -2,6 +2,8 @@ from fastapi import Request
 
 from backend.app.services.agent_service import LocationAgentService
 from backend.app.services.recommender_service import RecommenderService
+from backend.app.services.store_service import CommercialStoreService
+from backend.app.services.web_research_service import WebResearchService
 
 
 def get_recommender(request: Request) -> RecommenderService:
@@ -16,5 +18,21 @@ def get_location_agent(request: Request) -> LocationAgentService:
     service = getattr(request.app.state, "location_agent", None)
     if service is None:
         detail = getattr(request.app.state, "startup_error", "AI 상담 서비스가 준비되지 않았습니다.")
+        raise RuntimeError(detail)
+    return service
+
+
+def get_store_service(request: Request) -> CommercialStoreService:
+    service = getattr(request.app.state, "store_service", None)
+    if service is None:
+        detail = getattr(request.app.state, "startup_error", "상가업소 서비스가 준비되지 않았습니다.")
+        raise RuntimeError(detail)
+    return service
+
+
+def get_web_research_service(request: Request) -> WebResearchService:
+    service = getattr(request.app.state, "web_research_service", None)
+    if service is None:
+        detail = getattr(request.app.state, "startup_error", "웹 리서치 서비스가 준비되지 않았습니다.")
         raise RuntimeError(detail)
     return service

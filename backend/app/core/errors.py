@@ -9,6 +9,7 @@ from backend.app.services.agent_service import (
     AgentTimeoutError,
     AgentUnavailableError,
 )
+from backend.app.services.store_service import StoreDataUnavailableError, StoreUpstreamError
 
 
 def error_response(status_code: int, code: str, message: str, request_id: str | None) -> JSONResponse:
@@ -55,6 +56,26 @@ async def agent_state_error_handler(request: Request, exc: AgentStateError) -> J
     return error_response(
         422,
         "INVALID_AGENT_STATE",
+        str(exc),
+        getattr(request.state, "request_id", None),
+    )
+
+
+async def store_data_unavailable_error_handler(
+    request: Request, exc: StoreDataUnavailableError,
+) -> JSONResponse:
+    return error_response(
+        503,
+        "STORE_DATA_UNAVAILABLE",
+        str(exc),
+        getattr(request.state, "request_id", None),
+    )
+
+
+async def store_upstream_error_handler(request: Request, exc: StoreUpstreamError) -> JSONResponse:
+    return error_response(
+        502,
+        "STORE_UPSTREAM_ERROR",
         str(exc),
         getattr(request.state, "request_id", None),
     )

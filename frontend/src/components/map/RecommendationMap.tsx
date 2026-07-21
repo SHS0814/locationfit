@@ -8,6 +8,7 @@ interface Props {
   items: RecommendationItem[]
   selected: RecommendationItem | null
   onSelect: (item: RecommendationItem) => void
+  onExplore: (item: RecommendationItem) => void
 }
 
 const tileUrl = import.meta.env.VITE_MAP_TILE_URL || 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -63,7 +64,7 @@ function formatArea(areaSizeSqm: number): string {
   return `${Math.round(areaSizeSqm).toLocaleString('ko-KR')}㎡`
 }
 
-export function RecommendationMap({ items, selected, onSelect }: Props) {
+export function RecommendationMap({ items, selected, onSelect, onExplore }: Props) {
   return (
     <section className="map-panel" aria-label="추천 상권 지도">
       <MapContainer center={[37.5665, 126.978]} zoom={12} scrollWheelZoom className="map-container">
@@ -117,6 +118,9 @@ export function RecommendationMap({ items, selected, onSelect }: Props) {
             <span>성과 근거 <strong>{selected.reliability_adjusted_evidence_score?.toFixed(1) ?? '-'}</strong></span>
           </div>
           <small>노란 영역은 서울시가 제공한 상권 경계이며, 결과는 미래 매출 예측이 아닌 과거 관측 데이터 기반 추천입니다.</small>
+          <button className="store-explore-button" type="button" onClick={() => onExplore(selected)}>
+            이 상권 점포 분석
+          </button>
         </aside>
       )}
     </section>

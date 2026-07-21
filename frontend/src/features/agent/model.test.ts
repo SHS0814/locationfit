@@ -15,7 +15,7 @@ describe('agent session model', () => {
   it('restores a valid session and falls back from malformed JSON', () => {
     const draft = { ...emptyDraft, industry_code: 'CS100001', target_age_groups: ['20'] }
     const restored = restoreSession(JSON.stringify({
-      schemaVersion: 6,
+      schemaVersion: 7,
       history: [{ role: 'user', content: '카페를 열고 싶어요' }],
       draft,
       phase: 'ready_for_confirmation',
@@ -24,16 +24,17 @@ describe('agent session model', () => {
       activeRequest: draftToRequest(draft),
     }))
     expect(restored.draft.industry_code).toBe('CS100001')
-    expect(restored.schemaVersion).toBe(6)
+    expect(restored.schemaVersion).toBe(7)
     expect(restored.recommendationReport).toBeNull()
     expect(restored.context.discovery_question_count).toBe(0)
+    expect(restored.storeRelations).toEqual(['competitor', 'complementary', 'daily_life', 'other'])
     expect(restoreSession('{broken').phase).toBe('discovering')
   })
 
   it('drops cached recommendation items that predate map boundaries', () => {
     const draft = { ...emptyDraft, industry_code: 'CS100001', target_age_groups: ['20'] }
     const restored = restoreSession(JSON.stringify({
-      schemaVersion: 6,
+      schemaVersion: 7,
       history: [{ role: 'user', content: '카페를 열고 싶어요' }],
       draft,
       phase: 'results',
@@ -68,7 +69,7 @@ describe('agent session model', () => {
       draft: { ...emptyDraft, commercial_property_type: 'small_retail', floor: 'f2' },
       phase: 'results',
     }))
-    expect(restored.schemaVersion).toBe(6)
+    expect(restored.schemaVersion).toBe(7)
     expect(restored.draft.floor).toBeNull()
     expect('commercial_property_type' in restored.draft).toBe(false)
     expect(restored.phase).toBe('discovering')

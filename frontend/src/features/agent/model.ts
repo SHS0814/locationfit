@@ -2,6 +2,7 @@ import type {
   AgentMessage,
   AgentPhase,
   AgentAssumption,
+  AreaStoresResponse,
   AreaComparison,
   DataGap,
   FounderContext,
@@ -13,9 +14,12 @@ import type {
   RelaxationOption,
   StrategyScenario,
   TradeoffInsight,
+  StoreRelation,
+  WebResearchResponse,
 } from '../../types/api'
 
-export const AGENT_SESSION_KEY = 'kb-location-agent-session-v6'
+export const AGENT_SESSION_KEY = 'kb-location-agent-session-v7'
+export const AGENT_V6_SESSION_KEY = 'kb-location-agent-session-v6'
 export const AGENT_V5_SESSION_KEY = 'kb-location-agent-session-v5'
 export const AGENT_V4_SESSION_KEY = 'kb-location-agent-session-v4'
 export const AGENT_V3_SESSION_KEY = 'kb-location-agent-session-v3'
@@ -68,7 +72,7 @@ export const initialMessages: AgentMessage[] = [{
 }]
 
 export interface AgentSession {
-  schemaVersion: 6
+  schemaVersion: 7
   history: AgentMessage[]
   draft: RecommendationDraft
   phase: AgentPhase
@@ -86,10 +90,16 @@ export interface AgentSession {
   recommendationReport: RecommendationReport | null
   activeRequest: RecommendationRequest | null
   marketLookup: MarketLookupResult | null
+  storeAreaCode: string | null
+  storeAnalysis: AreaStoresResponse | null
+  selectedStoreId: string | null
+  storeRelations: StoreRelation[]
+  storeSearch: string
+  webResearch: WebResearchResponse[]
 }
 
 export const initialSession: AgentSession = {
-  schemaVersion: 6,
+  schemaVersion: 7,
   history: initialMessages,
   draft: emptyDraft,
   phase: 'discovering',
@@ -107,6 +117,12 @@ export const initialSession: AgentSession = {
   recommendationReport: null,
   activeRequest: null,
   marketLookup: null,
+  storeAreaCode: null,
+  storeAnalysis: null,
+  selectedStoreId: null,
+  storeRelations: ['competitor', 'complementary', 'daily_life', 'other'],
+  storeSearch: '',
+  webResearch: [],
 }
 
 export function isDraftReady(draft: RecommendationDraft): boolean {
@@ -145,7 +161,7 @@ export function restoreSession(raw: string | null): AgentSession {
   try {
     const parsed = JSON.parse(raw) as Partial<AgentSession>
     if (!Array.isArray(parsed.history) || !parsed.draft || !parsed.phase) return initialSession
-    const currentSchema = parsed.schemaVersion === 6
+    const currentSchema = parsed.schemaVersion === 7
     const legacyDraft = parsed.draft as Partial<RecommendationDraft> & { commercial_property_type?: unknown; floor?: string | null }
     const { commercial_property_type: _removedPropertyType, ...draftValues } = legacyDraft
     const floor = legacyDraft.floor && ['all', 'f1', 'non_f1'].includes(legacyDraft.floor)
@@ -155,7 +171,7 @@ export function restoreSession(raw: string | null): AgentSession {
       ? parsed.items
       : []
     return {
-      schemaVersion: 6,
+      schemaVersion: 7,
       history: parsed.history.slice(-20),
       draft: { ...emptyDraft, ...draftValues, floor },
       phase: !currentSchema || parsed.phase === ('gathering' as AgentPhase) ? 'discovering' : parsed.phase,
@@ -173,6 +189,14 @@ export function restoreSession(raw: string | null): AgentSession {
       recommendationReport: currentSchema ? parsed.recommendationReport || null : null,
       activeRequest: currentSchema ? parsed.activeRequest || null : null,
       marketLookup: parsed.marketLookup || null,
+      storeAreaCode: currentSchema && typeof parsed.storeAreaCode === 'string' ? parsed.storeAreaCode : null,
+      storeAnalysis: currentSchema && parsed.storeAnalysis ? parsed.storeAnalysis : null,
+      selectedStoreId: currentSchema && typeof parsed.selectedStoreId === 'string' ? parsed.selectedStoreId : null,
+      storeRelations: currentSchema && Array.isArray(parsed.storeRelations)
+        ? parsed.storeRelations
+        : ['competitor', 'complementary', 'daily_life', 'other'],
+      storeSearch: currentSchema && typeof parsed.storeSearch === 'string' ? parsed.storeSearch : '',
+      webResearch: currentSchema && Array.isArray(parsed.webResearch) ? parsed.webResearch : [],
     }
   } catch {
     return initialSession

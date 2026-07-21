@@ -139,6 +139,80 @@ export interface RecommendationResponse {
   diagnostics: Record<string, unknown>
 }
 
+export type StoreRelation = 'competitor' | 'complementary' | 'daily_life' | 'other'
+
+export interface StorePoint {
+  store_id: string
+  name: string
+  branch_name: string | null
+  industry_large_code: string | null
+  industry_large_name: string | null
+  industry_middle_code: string | null
+  industry_middle_name: string | null
+  industry_small_code: string | null
+  industry_small_name: string | null
+  ksic_code: string | null
+  ksic_name: string | null
+  road_address: string | null
+  lot_address: string | null
+  building_name: string | null
+  building_management_number: string | null
+  floor: string | null
+  unit: string | null
+  longitude: number
+  latitude: number
+  relation: StoreRelation
+}
+
+export interface AreaStoresResponse {
+  request_id: string
+  area_code: string
+  area_name: string
+  industry_code: string
+  industry_name: string
+  reference_month: string | null
+  fetched_at: string
+  cache_status: 'fresh' | 'refreshed' | 'stale'
+  source: string
+  disclosure: string
+  warnings: string[]
+  summary: {
+    total_count: number
+    total_density_per_sqkm: number
+    competitor_count: number
+    competitor_density_per_sqkm: number
+    relation_counts: Array<{ relation: StoreRelation; count: number }>
+    top_categories: Array<{ code: string | null; name: string; count: number }>
+  }
+  stores: StorePoint[]
+}
+
+export interface WebResearchSource {
+  title: string
+  url: string
+}
+
+export interface WebResearchRequest {
+  scope: 'area' | 'store'
+  area_code: string
+  industry_code: string
+  store_id: string | null
+  active_recommendation_request: RecommendationRequest
+  context: FounderContext
+}
+
+export interface WebResearchResponse {
+  request_id: string
+  scope: 'area' | 'store'
+  area_code: string
+  store_id: string | null
+  subject: string
+  summary: string
+  sources: WebResearchSource[]
+  searched_at: string
+  warnings: string[]
+}
+
 export interface ApiErrorBody {
   error?: {
     code?: string

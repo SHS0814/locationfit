@@ -5,6 +5,7 @@ import { AgentPanel } from './features/agent/AgentPanel'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
+  AGENT_V6_SESSION_KEY,
   AGENT_V5_SESSION_KEY,
   AGENT_V4_SESSION_KEY,
   AGENT_V2_SESSION_KEY,
@@ -19,12 +20,14 @@ import {
 import { RecommendationResults } from './features/recommendation/RecommendationResults'
 import { RecommendationReportView } from './features/recommendation/RecommendationReport'
 import { LeasePlanCard } from './features/recommendation/LeasePlanCard'
-import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption } from './types/api'
+import { AreaStoreExplorer } from './features/stores/AreaStoreExplorer'
+import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption, StoreRelation } from './types/api'
 
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)
+      || sessionStorage.getItem(AGENT_V6_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V5_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V4_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V3_SESSION_KEY)
@@ -35,6 +38,9 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastTurn, setLastTurn] = useState<AgentTurnRequest | null>(null)
+  const [storeLoading, setStoreLoading] = useState(false)
+  const [storeError, setStoreError] = useState<string | null>(null)
+  const [researchLoadingKey, setResearchLoadingKey] = useState<string | null>(null)
   const recommendationItemsReady = session.items.length > 0 && session.items.every(hasAreaBoundary)
 
   useEffect(() => {
@@ -91,7 +97,7 @@ export default function App() {
         ? draftToRequest(response.draft)
         : preserveAnalysis ? session.activeRequest : null
       const nextSession: AgentSession = {
-        schemaVersion: 6,
+        schemaVersion: 7,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
         draft: response.draft,
         phase: isMarketLookup ? session.phase : response.phase,
@@ -112,6 +118,14 @@ export default function App() {
           || (preserveAnalysis ? session.recommendationReport : null),
         activeRequest,
         marketLookup: response.market_lookup || null,
+        storeAreaCode: preserveAnalysis && !response.recommendations.length ? session.storeAreaCode : null,
+        storeAnalysis: preserveAnalysis && !response.recommendations.length ? session.storeAnalysis : null,
+        selectedStoreId: preserveAnalysis && !response.recommendations.length ? session.selectedStoreId : null,
+        storeRelations: preserveAnalysis && !response.recommendations.length
+          ? session.storeRelations
+          : ['competitor', 'complementary', 'daily_life', 'other'],
+        storeSearch: preserveAnalysis && !response.recommendations.length ? session.storeSearch : '',
+        webResearch: preserveAnalysis && !response.recommendations.length ? session.webResearch : [],
       }
       setSession(nextSession)
       if (response.recommendations.length) setSelected(response.recommendations[0] || null)
@@ -178,6 +192,8 @@ export default function App() {
       return {
         ...current, assumptions, draft, context, phase: 'discovering', scenarios: [], tradeoffs: [],
         relaxationOptions: [], selectedScenarioId: null, items: [], comparison: [], recommendationReport: null, activeRequest: null, marketLookup: null,
+        storeAreaCode: null, storeAnalysis: null, selectedStoreId: null,
+        storeRelations: ['competitor', 'complementary', 'daily_life', 'other'], storeSearch: '', webResearch: [],
       }
     })
   }
@@ -215,12 +231,19 @@ export default function App() {
       recommendationReport: null,
       activeRequest: null,
       marketLookup: null,
+      storeAreaCode: null,
+      storeAnalysis: null,
+      selectedStoreId: null,
+      storeRelations: ['competitor', 'complementary', 'daily_life', 'other'],
+      storeSearch: '',
+      webResearch: [],
     }))
   }
 
   const resetConversationAndAnalysis = () => {
     if (!window.confirm('대화와 모든 분석 결과를 초기화할까요?')) return
     sessionStorage.removeItem(AGENT_SESSION_KEY)
+    sessionStorage.removeItem(AGENT_V6_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V5_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V4_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V3_SESSION_KEY)
@@ -235,7 +258,58 @@ export default function App() {
     setSelected(null)
     setError(null)
     setLastTurn(null)
+    setStoreError(null)
   }
+
+  const openStoreExplorer = async (item: RecommendationItem) => {
+    setStoreError(null)
+    setSession((current) => ({ ...current, storeAreaCode: item.area_code, selectedStoreId: null }))
+    if (session.storeAnalysis?.area_code === item.area_code && session.storeAnalysis.industry_code === item.industry_code) return
+    setStoreLoading(true)
+    try {
+      const analysis = await api.areaStores(item.area_code, item.industry_code)
+      setSession((current) => current.storeAreaCode === item.area_code
+        ? { ...current, storeAnalysis: analysis, selectedStoreId: null, storeSearch: '', storeRelations: ['competitor', 'complementary', 'daily_life', 'other'], webResearch: [] }
+        : current)
+    } catch (reason) {
+      setStoreError(reason instanceof Error ? reason.message : '상가업소 정보를 불러오지 못했습니다.')
+      setSession((current) => ({ ...current, storeAreaCode: null }))
+    } finally {
+      setStoreLoading(false)
+    }
+  }
+
+  const runWebResearch = async (scope: 'area' | 'store', storeId?: string) => {
+    if (!session.storeAreaCode || !session.storeAnalysis || !session.activeRequest) return
+    const loadingKey = scope === 'area' ? 'area' : storeId || 'store'
+    setResearchLoadingKey(loadingKey)
+    setStoreError(null)
+    try {
+      const result = await api.webResearch({
+        scope,
+        area_code: session.storeAreaCode,
+        industry_code: session.storeAnalysis.industry_code,
+        store_id: storeId || null,
+        active_recommendation_request: session.activeRequest,
+        context: session.context,
+      })
+      setSession((current) => ({
+        ...current,
+        webResearch: [
+          ...current.webResearch.filter((item) => !(item.scope === result.scope && item.area_code === result.area_code && item.store_id === result.store_id)),
+          result,
+        ],
+      }))
+    } catch (reason) {
+      setStoreError(reason instanceof Error ? reason.message : '웹 리서치에 실패했습니다.')
+    } finally {
+      setResearchLoadingKey(null)
+    }
+  }
+
+  const activeStoreArea = session.storeAreaCode
+    ? session.items.find((item) => item.area_code === session.storeAreaCode) || null
+    : null
 
   if (!metadata) {
     return <main className="boot-screen"><div className="loader" /><p>{error || '상권 데이터를 불러오는 중입니다.'}</p></main>
@@ -284,9 +358,27 @@ export default function App() {
           />
           <div className="output-area">
             {error && <div className="error-banner" role="alert">{error} {lastTurn && <button type="button" onClick={() => executeTurn(lastTurn, false)}>다시 시도</button>}</div>}
-            {recommendationItemsReady ? (
+            {storeError && <div className="error-banner" role="alert">{storeError}</div>}
+            {activeStoreArea && session.storeAnalysis?.area_code === activeStoreArea.area_code ? (
+              <AreaStoreExplorer
+                area={activeStoreArea}
+                analysis={session.storeAnalysis}
+                relations={session.storeRelations}
+                search={session.storeSearch}
+                selectedStoreId={session.selectedStoreId}
+                research={session.webResearch}
+                researchLoadingKey={researchLoadingKey}
+                onBack={() => setSession((current) => ({ ...current, storeAreaCode: null, selectedStoreId: null }))}
+                onRelationsChange={(storeRelations: StoreRelation[]) => setSession((current) => ({ ...current, storeRelations }))}
+                onSearchChange={(storeSearch: string) => setSession((current) => ({ ...current, storeSearch }))}
+                onSelectStore={(selectedStoreId: string | null) => setSession((current) => ({ ...current, selectedStoreId }))}
+                onResearch={runWebResearch}
+              />
+            ) : storeLoading ? (
+              <div className="empty-state"><div className="loader" /><h2>상권 내부 영업 업소를 불러오는 중입니다</h2><p>상권 경계와 공공 API 데이터를 연결하고 있습니다.</p></div>
+            ) : recommendationItemsReady ? (
               <>
-                <RecommendationMap items={session.items} selected={selected} onSelect={setSelected} />
+                <RecommendationMap items={session.items} selected={selected} onSelect={setSelected} onExplore={openStoreExplorer} />
                 <RecommendationResults items={session.items} selectedCode={selected?.area_code || null} onSelect={setSelected} />
                 {selected?.rental_estimate && (
                   <LeasePlanCard
@@ -306,7 +398,7 @@ export default function App() {
           </div>
         </section>
       </main>
-      <footer>KB AI Challenge · 서울 열린데이터광장 기반 분석 · 미래 매출을 보장하지 않습니다.</footer>
+      <footer>KB AI Challenge · 서울 열린데이터광장·소상공인시장진흥공단 기반 분석 · 미래 매출을 보장하지 않습니다.</footer>
     </div>
   )
 }
