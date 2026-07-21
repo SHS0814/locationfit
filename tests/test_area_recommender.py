@@ -75,13 +75,23 @@ def synthetic_recommender() -> AreaRecommender:
 
 class AreaRecommenderTests(unittest.TestCase):
     def test_user_input_validation(self) -> None:
-        with self.assertRaisesRegex(ValueError, "희망 조건"):
-            validate_request(RecommendationRequest(industry_code="i1"), valid_industries={"i1"})
+        validate_request(RecommendationRequest(industry_code="i1"), valid_industries={"i1"})
         with self.assertRaisesRegex(ValueError, "존재하지 않는"):
             validate_request(
                 RecommendationRequest(industry_code="missing", weekend_importance=1.0),
                 valid_industries={"i1"},
             )
+
+    def test_industry_only_request_keeps_all_optional_conditions_unrestricted(self) -> None:
+        engine = synthetic_recommender()
+        result = engine.recommend(
+            RecommendationRequest(industry_code="i1", top_n=3),
+            k=10,
+        )
+
+        self.assertEqual(result.preference_features, ())
+        self.assertTrue(result.recommendations["condition_fit_score"].eq(100).all())
+        self.assertEqual(result.diagnostics["condition_feature_count"], 0)
 
     def test_condition_mapping_uses_explicit_features_only(self) -> None:
         request = RecommendationRequest(

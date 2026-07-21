@@ -57,10 +57,10 @@ SYSTEM_INSTRUCTIONS = """
 
 반드시 지킬 규칙:
 1. 사용자의 자연어를 제공된 코드, RecommendationDraft, FounderContext에만 매핑한다.
-2. current_draft와 current_context의 기존 값을 보존하되 사용자가 명시적으로 바꾼 값만 수정한다.
-3. 업종이 없으면 업종을 질문한다. 업종이 있으면 고객·운영시간·지역 유연성·위험 선호 중 비어 있는 가장 중요한 항목 하나만 질문한다.
+2. current_draft와 current_context의 기존 값을 보존하되 사용자가 명확하게 말한 조건만 구조화 필드에 고정한다. 업종·고객·시간·지역·예산 등을 추론해서 구조화 필드에 넣지 않는다.
+3. 업종이 없을 때만 업종을 질문한다. 업종이 있으면 고객·성별·연령·운영시간·지역·상권유형·위험 선호·예산 같은 선택 조건을 추가로 질문하지 않는다. 비어 있는 선택 조건은 제한 없음으로 두고 바로 데이터 탐색 단계로 진행한다.
 3-1. 사용자가 총 창업예산, 월 환산임대료 한도, 임대면적, 상가 유형, 층을 말하면 구조화 필드에 저장한다. 월 한도가 있는데 임대면적·상가 유형·층 중 하나라도 없으면 한 번의 질문으로 필요한 임대조건을 확인한다.
-4. 사용자가 명시하지 않았지만 합리적으로 추론한 내용은 assumptions에 inferred로 넣고 사실처럼 단정하지 않는다.
+4. 사용자가 명시하지 않은 선택 조건은 구조화 필드에 추론해 넣지 않는다. 빈 연령은 10대~60대 이상 전체, 빈 성별은 전체 성별, 빈 시간대·지역·상권유형은 각각 전체 범위라는 뜻이며 서비스가 assumptions에 inferred로 표시한다.
 5. 조건이 충분하면 데이터 탐색을 시작한다고 안내한다. 추천 실행이나 탐색 수치를 미리 말하지 않는다.
 6. recommend_confirmed_areas는 확인 액션에서 제공될 때 정확히 한 번 호출한다. 도구가 없으면 추천을 실행했다고 말하지 않는다.
 7. 추천 결과가 있을 때 순위나 이름으로 비교를 요청받으면 compare_recommended_areas를 호출한다.
@@ -267,13 +267,15 @@ class LocationAgentService:
         if payload.action == "select_scenario":
             assert payload.scenario_id is not None
             draft = payload.draft.model_copy(update={"strategy": payload.scenario_id})
-            draft, assumptions = self._ensure_explorable(draft, payload.assumptions)
+            context, assumptions = self._apply_broad_assumptions(
+                draft, payload.context, payload.assumptions,
+            )
             exploration, scenarios, tradeoffs, relaxations = self._explore(draft)
             return self._response(
                 assistant_message=f"{self._strategy_label(payload.scenario_id)}을 선택했습니다. 조건과 가정을 확인한 뒤 최종 분석을 실행해주세요.",
                 phase="ready_for_confirmation",
                 draft=draft,
-                context=payload.context,
+                context=context,
                 assumptions=assumptions,
                 missing_fields=[],
                 confirmation_summary=self._confirmation_summary(draft),
@@ -311,6 +313,7 @@ class LocationAgentService:
         self._validate_draft(draft)
         context = self._merge_context(payload.context, execution.decision.context, draft, payload.message)
         assumptions = self._merge_assumptions(payload.assumptions, execution.decision.assumptions)
+        context, assumptions = self._apply_broad_assumptions(draft, context, assumptions)
 
         if payload.action == "confirm_recommendation":
             report = execution.recommendation_report
@@ -337,7 +340,7 @@ class LocationAgentService:
             )
 
         active_request_unchanged = False
-        if payload.active_recommendation_request is not None and draft.industry_code and draft.has_preference():
+        if payload.active_recommendation_request is not None and draft.industry_code:
             active_request_unchanged = (
                 draft.to_request().model_dump()
                 == payload.active_recommendation_request.model_dump()
@@ -356,22 +359,19 @@ class LocationAgentService:
                 active_recommendation_request=payload.active_recommendation_request,
             )
 
-        if not self._context_ready(draft, context):
+        if not self._context_ready(draft):
             next_count = min(4, context.discovery_question_count + 1)
             context = context.model_copy(update={"discovery_question_count": next_count})
-            if next_count < 4 or not draft.industry_code:
-                return self._response(
-                    assistant_message=self._next_question(draft, context),
-                    phase="discovering",
-                    draft=draft,
-                    context=context,
-                    assumptions=assumptions,
-                    missing_fields=self._missing_fields(draft, context),
-                    analysis_revision=payload.analysis_revision,
-                )
-            context, assumptions = self._apply_default_context(context, assumptions)
+            return self._response(
+                assistant_message=self._next_question(draft),
+                phase="discovering",
+                draft=draft,
+                context=context,
+                assumptions=assumptions,
+                missing_fields=self._missing_fields(draft),
+                analysis_revision=payload.analysis_revision,
+            )
 
-        draft, assumptions = self._ensure_explorable(draft, assumptions)
         exploration, scenarios, tradeoffs, relaxations = self._explore(draft)
         candidate_count = int(exploration.get("eligible_area_count", 0))
         return self._response(
@@ -442,7 +442,7 @@ class LocationAgentService:
         updates: dict[str, Any] = {}
         if context.business_description is None and draft.industry_code:
             updates["business_description"] = message[:500]
-        if context.location_flexibility is None and draft.preferred_districts:
+        if draft.preferred_districts:
             updates["location_flexibility"] = "fixed"
         return context.model_copy(update=updates)
 
@@ -456,28 +456,17 @@ class LocationAgentService:
         return list(merged.values())[:10]
 
     @staticmethod
-    def _context_signals(draft: RecommendationDraft, context: FounderContext) -> set[str]:
-        signals: set[str] = set()
-        if context.target_customer or draft.target_gender or draft.target_age_groups:
-            signals.add("target_customer")
-        if context.operating_pattern or draft.preferred_time_bands:
-            signals.add("operating_pattern")
-        if context.location_flexibility or draft.preferred_districts or draft.preferred_area_types:
-            signals.add("location")
-        if context.risk_tolerance:
-            signals.add("risk")
-        return signals
-
-    def _context_ready(self, draft: RecommendationDraft, context: FounderContext) -> bool:
+    def _context_ready(draft: RecommendationDraft) -> bool:
         rent_fields = (draft.rentable_area_sqm, draft.commercial_property_type, draft.floor)
         rent_ready = not any(value is not None for value in rent_fields) or all(
             value is not None for value in rent_fields
         )
         if draft.monthly_converted_rent_limit_krw is not None:
             rent_ready = rent_ready and all(value is not None for value in rent_fields)
-        return bool(draft.industry_code) and rent_ready and len(self._context_signals(draft, context)) >= 2
+        return bool(draft.industry_code) and rent_ready
 
-    def _next_question(self, draft: RecommendationDraft, context: FounderContext) -> str:
+    @staticmethod
+    def _next_question(draft: RecommendationDraft) -> str:
         if not draft.industry_code:
             return "어떤 업종이나 가게를 준비하고 계신가요? 메뉴나 서비스까지 편하게 말씀해주세요."
         rent_fields = (draft.rentable_area_sqm, draft.commercial_property_type, draft.floor)
@@ -486,52 +475,99 @@ class LocationAgentService:
             or any(value is not None for value in rent_fields)
         ) and not all(value is not None for value in rent_fields):
             return "임대료를 추정하려면 공용면적을 포함한 임대면적, 상가 유형, 원하는 층을 알려주세요."
-        signals = self._context_signals(draft, context)
-        if "target_customer" not in signals:
-            return "가장 중요하게 생각하는 고객은 누구이고, 주로 어떤 상황에서 방문할까요?"
-        if "operating_pattern" not in signals:
-            return "매출이 가장 중요할 것으로 보는 영업 시간대나 요일은 언제인가요?"
-        if "location" not in signals:
-            return "희망 지역이 정해져 있나요, 아니면 조건이 좋다면 서울 전체를 볼 수 있나요?"
-        return "성장 가능성과 안정적인 운영 중 어느 쪽을 더 중요하게 생각하시나요?"
+        return "어떤 업종이나 가게를 준비하고 계신가요?"
 
-    @staticmethod
-    def _apply_default_context(
+    def _apply_broad_assumptions(
+        self,
+        draft: RecommendationDraft,
         context: FounderContext,
         assumptions: list[AgentAssumption],
     ) -> tuple[FounderContext, list[AgentAssumption]]:
+        """Describe omitted optional inputs as unrestricted without scoring them."""
+        controlled_ids = {
+            "broad_customer_age", "broad_customer_gender", "broad_operating_time",
+            "broad_location", "broad_area_type", "broad_risk", "broad_budget",
+            "broad_optional_preferences",
+        }
+        retained = [item for item in assumptions if item.id not in controlled_ids]
         updates: dict[str, Any] = {}
         defaults: list[AgentAssumption] = []
-        if context.location_flexibility is None:
-            updates["location_flexibility"] = "open"
+
+        if not draft.target_age_groups:
             defaults.append(AgentAssumption(
-                id="default_location_open",
-                text="특정 자치구에 제한하지 않고 서울 전체를 탐색합니다.",
-                source_field="location_flexibility",
+                id="broad_customer_age",
+                text="고객 연령을 지정하지 않아 10대·20대·30대·40대·50대·60대 이상 전체를 포함합니다.",
+                source_field="target_age_groups",
+            ))
+        if draft.target_gender is None:
+            defaults.append(AgentAssumption(
+                id="broad_customer_gender",
+                text="고객 성별을 지정하지 않아 전체 성별을 포함합니다.",
+                source_field="target_gender",
+            ))
+        if not draft.preferred_time_bands and draft.weekend_importance == 0:
+            defaults.append(AgentAssumption(
+                id="broad_operating_time",
+                text="영업 시간대와 평일·주말 선호를 지정하지 않아 전체 시간 범위를 포함합니다.",
+                source_field="preferred_time_bands",
+            ))
+        if not draft.preferred_districts:
+            location_text = (
+                "희망 자치구를 지정하지 않아 제외 지역을 뺀 서울 전체를 탐색합니다."
+                if draft.excluded_districts
+                else "희망 자치구를 지정하지 않아 서울 전체를 탐색합니다."
+            )
+            defaults.append(AgentAssumption(
+                id="broad_location",
+                text=location_text,
+                source_field="preferred_districts",
+            ))
+        if not draft.preferred_area_types:
+            defaults.append(AgentAssumption(
+                id="broad_area_type",
+                text="상권 유형을 지정하지 않아 모든 상권 유형을 포함합니다.",
+                source_field="preferred_area_types",
             ))
         if context.risk_tolerance is None:
-            updates["risk_tolerance"] = "medium"
             defaults.append(AgentAssumption(
-                id="default_risk_medium",
-                text="별도 위험 선호가 없어 균형 수준의 데이터 신뢰도를 적용합니다.",
+                id="broad_risk",
+                text="위험 선호를 지정하지 않아 성장 가능성과 안정성 전략을 모두 비교합니다.",
                 source_field="risk_tolerance",
             ))
-        return context.model_copy(update=updates), LocationAgentService._merge_assumptions(assumptions, defaults)
+        if (
+            draft.total_startup_budget_krw is None
+            and draft.monthly_converted_rent_limit_krw is None
+        ):
+            defaults.append(AgentAssumption(
+                id="broad_budget",
+                text="예산을 지정하지 않아 총 창업예산과 월 임대료 상한을 적용하지 않습니다.",
+                source_field="budget",
+            ))
 
-    @staticmethod
-    def _ensure_explorable(
-        draft: RecommendationDraft,
-        assumptions: list[AgentAssumption],
-    ) -> tuple[RecommendationDraft, list[AgentAssumption]]:
-        if draft.has_preference():
-            return draft, assumptions
-        updated = draft.model_copy(update={"min_data_reliability": 0.5})
-        fallback = AgentAssumption(
-            id="default_min_reliability",
-            text="구체적인 입지 선호가 없어 데이터 신뢰도 0.5 이상을 기본 조건으로 사용합니다.",
-            source_field="min_data_reliability",
+        importance_fields = (
+            "floating_population_importance", "resident_population_importance",
+            "worker_population_importance", "apartment_importance",
+            "transport_facility_importance", "education_facility_importance",
+            "medical_facility_importance", "shopping_facility_importance",
+            "culture_facility_importance",
         )
-        return updated, LocationAgentService._merge_assumptions(assumptions, [fallback])
+        no_optional_weight = not any(float(getattr(draft, name)) > 0 for name in importance_fields)
+        if (
+            no_optional_weight
+            and draft.store_density_preference is None
+            and draft.franchise_preference is None
+            and draft.min_data_reliability == 0
+        ):
+            defaults.append(AgentAssumption(
+                id="broad_optional_preferences",
+                text="별도로 말하지 않은 인구·시설·점포 특성과 데이터 신뢰도에는 추가 제한이나 가중치를 두지 않습니다.",
+                source_field="optional_preferences",
+            ))
+
+        if context.location_flexibility is None and not draft.preferred_districts:
+            updates["location_flexibility"] = "open"
+        combined = defaults + retained
+        return context.model_copy(update=updates), combined[:10]
 
     def _validate_draft(self, draft: RecommendationDraft) -> None:
         industry_codes = {option["code"] for option in self._metadata["industries"]}
@@ -546,7 +582,8 @@ class LocationAgentService:
         if not set(draft.preferred_area_types).issubset(area_type_codes):
             raise AgentStateError("AI가 지원하지 않는 상권 유형을 선택했습니다. 다시 표현해주세요.")
 
-    def _missing_fields(self, draft: RecommendationDraft, context: FounderContext) -> list[str]:
+    @staticmethod
+    def _missing_fields(draft: RecommendationDraft) -> list[str]:
         missing: list[str] = []
         if not draft.industry_code:
             missing.append("industry_code")
@@ -558,12 +595,6 @@ class LocationAgentService:
                     missing.append(field)
                 if len(missing) >= 3:
                     return missing
-        signals = self._context_signals(draft, context)
-        for field in ("target_customer", "operating_pattern", "location", "risk"):
-            if field not in signals:
-                missing.append(field)
-            if len(missing) >= 3:
-                break
         return missing
 
     def _confirmation_summary(self, draft: RecommendationDraft) -> str:

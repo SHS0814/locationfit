@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { draftToRequest, emptyDraft, isDraftReady, restoreSession } from './model'
 
 describe('agent session model', () => {
-  it('requires an industry and at least one preference before confirmation', () => {
+  it('accepts an industry alone and treats omitted preferences as unrestricted', () => {
     expect(isDraftReady(emptyDraft)).toBe(false)
-    expect(isDraftReady({ ...emptyDraft, industry_code: 'CS100001' })).toBe(false)
+    expect(isDraftReady({ ...emptyDraft, industry_code: 'CS100001' })).toBe(true)
     expect(isDraftReady({
       ...emptyDraft,
       industry_code: 'CS100001',
@@ -42,8 +42,8 @@ describe('agent session model', () => {
     expect(restored.activeRequest?.industry_code).toBe('CS100001')
   })
 
-  it('does not treat a strategy selection as a location preference', () => {
-    expect(isDraftReady({ ...emptyDraft, industry_code: 'CS100001', strategy: 'growth' })).toBe(false)
+  it('keeps an industry-only draft ready after strategy selection', () => {
+    expect(isDraftReady({ ...emptyDraft, industry_code: 'CS100001', strategy: 'growth' })).toBe(true)
   })
 
   it('requires complete rent conditions only when a monthly cap is used', () => {

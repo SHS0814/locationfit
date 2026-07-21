@@ -64,7 +64,7 @@ export const emptyContext: FounderContext = {
 
 export const initialMessages: AgentMessage[] = [{
   role: 'assistant',
-  content: '입지를 추천받거나 상권 통계를 바로 조회할 수 있어요. 원하는 가게 조건이나 “매출 높은 상권 5곳”처럼 편하게 말씀해주세요.',
+  content: '입지를 추천받거나 상권 통계를 바로 조회할 수 있어요. 말하지 않은 조건은 전체 범위로 보고, 확실히 알려주신 조건만 반영합니다.',
 }]
 
 export interface AgentSession {
@@ -109,20 +109,13 @@ export const initialSession: AgentSession = {
   marketLookup: null,
 }
 
-export function hasDraftPreference(draft: RecommendationDraft): boolean {
-  return Object.entries(draft).some(([key, value]) => {
-    if (['industry_code', 'top_n', 'strategy', 'total_startup_budget_krw', 'monthly_converted_rent_limit_krw', 'rentable_area_sqm', 'commercial_property_type', 'floor'].includes(key)) return false
-    return Array.isArray(value) ? value.length > 0 : Boolean(value)
-  })
-}
-
 export function isDraftReady(draft: RecommendationDraft): boolean {
   const rentFields = [draft.rentable_area_sqm, draft.commercial_property_type, draft.floor]
   const hasAnyRentField = rentFields.some((value) => value != null)
   const hasAllRentFields = rentFields.every((value) => value != null)
   const rentReady = (!hasAnyRentField || hasAllRentFields)
     && (draft.monthly_converted_rent_limit_krw == null || hasAllRentFields)
-  return Boolean(draft.industry_code) && hasDraftPreference(draft) && rentReady
+  return Boolean(draft.industry_code) && rentReady
 }
 
 export function draftToRequest(draft: RecommendationDraft): RecommendationRequest {

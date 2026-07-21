@@ -77,19 +77,9 @@ class RecommendationDraft(BaseModel):
     commercial_property_type: PropertyType | None = None
     floor: FloorType | None = None
 
-    def has_preference(self) -> bool:
-        values = self.model_dump(exclude={
-            "industry_code", "top_n", "strategy", "total_startup_budget_krw",
-            "monthly_converted_rent_limit_krw", "rentable_area_sqm",
-            "commercial_property_type", "floor",
-        }).values()
-        return any(bool(value) for value in values)
-
     def to_request(self) -> RecommendationRequestSchema:
         if not self.industry_code:
             raise ValueError("업종을 먼저 알려주세요.")
-        if not self.has_preference():
-            raise ValueError("업종 외에 원하는 조건을 하나 이상 알려주세요.")
         return RecommendationRequestSchema(**self.model_dump())
 
 

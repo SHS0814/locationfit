@@ -252,7 +252,7 @@ export function AgentPanel({
         </label>
 
         <div className="condition-group">
-          <span>주요 고객 연령</span>
+          <span>주요 고객 연령 <small>미지정 시 전 연령</small></span>
           <div className="chip-group">
             {metadata.age_groups.map((option) => (
               <button key={option.code} type="button" className={draft.target_age_groups.includes(option.code) ? 'chip active' : 'chip'}
@@ -266,7 +266,7 @@ export function AgentPanel({
         <details className="condition-details">
           <summary>시간대·상권 유형·중요도 조정</summary>
           <div className="condition-group">
-            <span>선호 시간대</span>
+            <span>선호 시간대 <small>미지정 시 전 시간대</small></span>
             <div className="chip-group">
               {metadata.time_bands.map((option) => (
                 <button key={option.code} type="button" className={draft.preferred_time_bands.includes(option.code) ? 'chip active' : 'chip'}
@@ -277,7 +277,7 @@ export function AgentPanel({
             </div>
           </div>
           <div className="condition-group">
-            <span>상권 유형</span>
+            <span>상권 유형 <small>미지정 시 전체 유형</small></span>
             <div className="chip-group">
               {metadata.area_types.map((option) => (
                 <button key={option.code} type="button" className={draft.preferred_area_types.includes(option.code) ? 'chip active' : 'chip'}

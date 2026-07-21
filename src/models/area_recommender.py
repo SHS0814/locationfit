@@ -165,7 +165,7 @@ def validate_request(
     *,
     valid_industries: set[str] | None = None,
 ) -> None:
-    """Validate enumerations, ranges, requested industry, and non-empty conditions."""
+    """Validate enumerations, ranges, and the requested industry."""
     if not request.industry_code or not request.industry_code.strip():
         raise ValueError("industry_code는 필수입니다.")
     if valid_industries is not None and request.industry_code not in valid_industries:
@@ -189,20 +189,6 @@ def validate_request(
         raise ValueError("top_n은 1~100 사이여야 합니다.")
     if request.strategy not in STRATEGY_FINAL_WEIGHTS:
         raise ValueError(f"지원하지 않는 strategy입니다: {request.strategy}")
-    condition_values = [
-        request.preferred_area_types,
-        request.target_gender,
-        request.target_age_groups,
-        request.preferred_time_bands,
-        *(getattr(request, field) for field in IMPORTANCE_FIELDS),
-        request.store_density_preference,
-        request.franchise_preference,
-        request.preferred_districts,
-        request.excluded_districts,
-        request.min_data_reliability,
-    ]
-    if not any(bool(value) for value in condition_values):
-        raise ValueError("industry_code 외에 최소 한 개의 희망 조건을 입력해야 합니다.")
 
 
 def build_preference_features(request: RecommendationRequest, available_columns: Iterable[str]) -> tuple[PreferenceFeature, ...]:

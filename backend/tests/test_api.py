@@ -26,11 +26,13 @@ def test_health_metadata_and_recommendation_contract() -> None:
         assert body["request_id"] == response.headers["x-request-id"]
 
 
-def test_request_requires_a_preference() -> None:
+def test_request_accepts_industry_only_as_unrestricted_scope() -> None:
     with TestClient(app) as client:
         response = client.post("/api/v1/recommendations", json={"industry_code": "CS100001"})
-        assert response.status_code == 422
-        assert response.json()["error"]["code"] == "INVALID_RECOMMENDATION_REQUEST"
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body["recommendations"]) == 10
+        assert body["diagnostics"]["condition_feature_count"] == 0
 
 
 def test_schema_validation_has_a_stable_error_shape() -> None:

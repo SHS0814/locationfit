@@ -109,28 +109,39 @@ def test_agent_explores_three_scenarios_without_final_recommendation() -> None:
     assert result["analysis_revision"] == 1
 
 
-def test_discovery_asks_one_question_and_applies_defaults_after_four_turns() -> None:
+def test_missing_optional_conditions_are_immediately_treated_as_broad_scope() -> None:
     service = LocationAgentService(
         RecommenderService(ARTIFACT_DIR), IncompleteRunner(), timeout_seconds=1,
     )
-    payload = AgentTurnRequest(message="한식집을 열고 싶어요")
-    for turn in range(4):
-        result = asyncio.run(service.turn(payload))
-        if turn < 3:
-            assert result["phase"] == "discovering"
-            assert result["assistant_message"].count("?") <= 1
-        payload = AgentTurnRequest(
-            message="아직 잘 모르겠어요",
-            draft=result["draft"],
-            context=result["context"],
-            assumptions=result["assumptions"],
-            analysis_revision=result["analysis_revision"],
-        )
+    result = asyncio.run(service.turn(AgentTurnRequest(message="한식집을 열고 싶어요")))
 
     assert result["phase"] == "scenarios_ready"
     assert result["context"].location_flexibility == "open"
-    assert result["context"].risk_tolerance == "medium"
-    assert result["draft"].min_data_reliability == 0.5
+    assert result["context"].risk_tolerance is None
+    assert result["draft"].target_age_groups == []
+    assert result["draft"].preferred_time_bands == []
+    assert result["draft"].min_data_reliability == 0
+    assumption_ids = {item.id for item in result["assumptions"]}
+    assert {
+        "broad_customer_age", "broad_customer_gender", "broad_operating_time",
+        "broad_location", "broad_area_type", "broad_risk", "broad_budget",
+        "broad_optional_preferences",
+    }.issubset(assumption_ids)
+    age_assumption = next(
+        item for item in result["assumptions"] if item.id == "broad_customer_age"
+    )
+    assert "10대·20대·30대·40대·50대·60대 이상 전체" in age_assumption.text
+
+
+def test_explicit_conditions_are_preserved_without_broad_assumption_for_that_field() -> None:
+    service = LocationAgentService(
+        RecommenderService(ARTIFACT_DIR), ReadyRunner(), timeout_seconds=1,
+    )
+    result = asyncio.run(service.turn(AgentTurnRequest(message="강남에서 한식집을 열고 싶어요")))
+
+    assert result["draft"].preferred_districts == ["강남구"]
+    assert result["context"].location_flexibility == "fixed"
+    assert "broad_location" not in {item.id for item in result["assumptions"]}
 
 
 def test_confirm_action_returns_deterministic_recommendations() -> None:
@@ -217,12 +228,26 @@ def test_select_scenario_requires_confirmation_before_final_result() -> None:
     assert "안정성 우선형" in result["confirmation_summary"]
 
 
-def test_confirmation_requires_ready_draft() -> None:
+def test_confirmation_accepts_industry_only_as_broad_scope() -> None:
     with TestClient(app) as client:
+        app.state.location_agent = LocationAgentService(
+            app.state.recommender, ReadyRunner(), timeout_seconds=1,
+        )
         response = client.post("/api/v1/agent/turns", json={
             "action": "confirm_recommendation",
             "message": "분석해주세요",
             "draft": {"industry_code": "CS100001"},
+        })
+        assert response.status_code == 200
+        assert response.json()["phase"] == "results"
+
+
+def test_confirmation_still_requires_industry() -> None:
+    with TestClient(app) as client:
+        response = client.post("/api/v1/agent/turns", json={
+            "action": "confirm_recommendation",
+            "message": "분석해주세요",
+            "draft": {},
         })
         assert response.status_code == 422
         assert response.json()["error"]["code"] == "REQUEST_SCHEMA_VALIDATION_FAILED"
