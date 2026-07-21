@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from backend.app.api.v1 import agent, costs, health, metadata, recommendations, research, stores
+from backend.app.api.v1 import agent, costs, finance, health, metadata, recommendations, research, stores
 from backend.app.core.config import settings
 from backend.app.core.errors import (
     request_validation_error_handler,
@@ -37,6 +37,8 @@ from backend.app.services.store_service import (
     StoreUpstreamError,
 )
 from backend.app.services.web_research_service import OpenAIWebResearchRunner, WebResearchService
+from backend.app.services.finance_service import FinancePlanService
+from backend.app.services.listing_service import LeaseCandidateService, OpenAIListingExtractionRunner
 
 
 logger = logging.getLogger(__name__)
@@ -73,6 +75,11 @@ async def lifespan(app: FastAPI):
             OpenAIWebResearchRunner(model=settings.openai_model),
             timeout_seconds=settings.web_research_timeout_seconds,
         )
+        app.state.lease_candidate_service = LeaseCandidateService(
+            OpenAIListingExtractionRunner(model=settings.openai_model),
+            timeout_seconds=settings.listing_extraction_timeout_seconds,
+        )
+        app.state.finance_plan_service = FinancePlanService()
         app.state.startup_error = None
     except Exception as exc:
         logger.exception("Failed to load recommendation artifacts")
@@ -80,6 +87,8 @@ async def lifespan(app: FastAPI):
         app.state.location_agent = None
         app.state.store_service = None
         app.state.web_research_service = None
+        app.state.lease_candidate_service = None
+        app.state.finance_plan_service = None
         app.state.startup_error = str(exc)
     yield
 
@@ -116,7 +125,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)
     for router in (
         health.router, metadata.router, recommendations.router, costs.router, stores.router,
-        agent.router, research.router,
+        agent.router, research.router, finance.router,
     ):
         app.include_router(router, prefix=settings.api_prefix)
     return app

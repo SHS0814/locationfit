@@ -213,6 +213,91 @@ export interface WebResearchResponse {
   warnings: string[]
 }
 
+export interface LeaseCandidateExtraction {
+  listing_title: string | null
+  address: string | null
+  deposit_krw: number | null
+  monthly_rent_krw: number | null
+  management_fee_krw: number | null
+  key_money_krw: number | null
+  rentable_area_sqm: number | null
+  floor: string | null
+  notes: string | null
+  missing_fields: string[]
+}
+
+export interface LeaseCandidateExtractRequest {
+  source_url: string | null
+  source_text: string | null
+  selected_area_name: string
+}
+
+export interface LeaseCandidateExtractResponse {
+  request_id: string
+  source_url: string | null
+  source_kind: 'url' | 'text' | 'url_and_text'
+  extracted: LeaseCandidateExtraction
+  warnings: string[]
+  requires_confirmation: boolean
+}
+
+export type FinancialVulnerability = 'low_credit' | 'basic_livelihood' | 'near_poverty' | 'earned_income_tax_credit' | 'none' | 'unknown'
+
+export interface FinancePlanRequest {
+  candidate: {
+    source_url: string | null
+    listing_title: string | null
+    address: string | null
+    deposit_krw: number
+    monthly_rent_krw: number
+    management_fee_krw: number
+    key_money_krw: number
+    rentable_area_sqm: number | null
+    floor: string | null
+  }
+  additional_costs: {
+    interior_krw: number
+    equipment_krw: number
+    initial_inventory_krw: number
+    working_capital_krw: number
+    other_krw: number
+  }
+  eligibility: {
+    own_capital_krw: number
+    business_status: 'pre_startup' | 'operating'
+    business_age_months: number | null
+    is_small_business: boolean | null
+    vulnerability: FinancialVulnerability
+    has_policy_excluded_industry: boolean | null
+  }
+}
+
+export interface FinancePlanResponse {
+  request_id: string
+  funding: {
+    refundable_deposit_krw: number
+    one_time_nonrefundable_krw: number
+    annual_occupancy_cost_krw: number
+    additional_startup_cost_krw: number
+    total_first_year_cash_need_krw: number
+    own_capital_krw: number
+    funding_gap_krw: number
+    own_capital_ratio: number
+  }
+  policy_candidates: Array<{
+    program_id: string
+    name: string
+    provider: string
+    status: 'basic_fit' | 'needs_review' | 'not_eligible'
+    reasons: string[]
+    checks_required: string[]
+    source_title: string
+    source_url: string
+    source_checked_at: string
+  }>
+  disclosure: string
+}
+
 export interface ApiErrorBody {
   error?: {
     code?: string

@@ -17,8 +17,10 @@ import type {
   StoreRelation,
   WebResearchResponse,
 } from '../../types/api'
+import type { LeaseCandidateFinanceState, LeaseCandidateRecord } from '../finance/model'
 
-export const AGENT_SESSION_KEY = 'kb-location-agent-session-v7'
+export const AGENT_SESSION_KEY = 'kb-location-agent-session-v8'
+export const AGENT_V7_SESSION_KEY = 'kb-location-agent-session-v7'
 export const AGENT_V6_SESSION_KEY = 'kb-location-agent-session-v6'
 export const AGENT_V5_SESSION_KEY = 'kb-location-agent-session-v5'
 export const AGENT_V4_SESSION_KEY = 'kb-location-agent-session-v4'
@@ -72,7 +74,7 @@ export const initialMessages: AgentMessage[] = [{
 }]
 
 export interface AgentSession {
-  schemaVersion: 7
+  schemaVersion: 8
   history: AgentMessage[]
   draft: RecommendationDraft
   phase: AgentPhase
@@ -96,10 +98,14 @@ export interface AgentSession {
   storeRelations: StoreRelation[]
   storeSearch: string
   webResearch: WebResearchResponse[]
+  leaseCandidates: LeaseCandidateRecord[]
+  leaseFinanceById: Record<string, LeaseCandidateFinanceState>
+  selectedLeaseCandidateId: string | null
+  financeAreaCode: string | null
 }
 
 export const initialSession: AgentSession = {
-  schemaVersion: 7,
+  schemaVersion: 8,
   history: initialMessages,
   draft: emptyDraft,
   phase: 'discovering',
@@ -123,6 +129,10 @@ export const initialSession: AgentSession = {
   storeRelations: ['competitor', 'complementary', 'daily_life', 'other'],
   storeSearch: '',
   webResearch: [],
+  leaseCandidates: [],
+  leaseFinanceById: {},
+  selectedLeaseCandidateId: null,
+  financeAreaCode: null,
 }
 
 export function isDraftReady(draft: RecommendationDraft): boolean {
@@ -161,24 +171,26 @@ export function restoreSession(raw: string | null): AgentSession {
   try {
     const parsed = JSON.parse(raw) as Partial<AgentSession>
     if (!Array.isArray(parsed.history) || !parsed.draft || !parsed.phase) return initialSession
-    const currentSchema = parsed.schemaVersion === 7
+    const parsedVersion = Number((parsed as { schemaVersion?: unknown }).schemaVersion)
+    const currentSchema = parsedVersion === 8
+    const analysisCompatible = currentSchema || parsedVersion === 7
     const legacyDraft = parsed.draft as Partial<RecommendationDraft> & { commercial_property_type?: unknown; floor?: string | null }
     const { commercial_property_type: _removedPropertyType, ...draftValues } = legacyDraft
     const floor = legacyDraft.floor && ['all', 'f1', 'non_f1'].includes(legacyDraft.floor)
       ? legacyDraft.floor as RecommendationDraft['floor']
       : null
-    const restoredItems = currentSchema && Array.isArray(parsed.items) && parsed.items.every(hasAreaBoundary)
+    const restoredItems = analysisCompatible && Array.isArray(parsed.items) && parsed.items.every(hasAreaBoundary)
       ? parsed.items
       : []
     return {
-      schemaVersion: 7,
+      schemaVersion: 8,
       history: parsed.history.slice(-20),
       draft: { ...emptyDraft, ...draftValues, floor },
-      phase: !currentSchema || parsed.phase === ('gathering' as AgentPhase) ? 'discovering' : parsed.phase,
+      phase: !analysisCompatible || parsed.phase === ('gathering' as AgentPhase) ? 'discovering' : parsed.phase,
       context: { ...emptyContext, ...parsed.context },
       assumptions: Array.isArray(parsed.assumptions) ? parsed.assumptions : [],
       explorationSummary: parsed.explorationSummary || {},
-      scenarios: currentSchema && Array.isArray(parsed.scenarios) ? parsed.scenarios : [],
+      scenarios: analysisCompatible && Array.isArray(parsed.scenarios) ? parsed.scenarios : [],
       tradeoffs: Array.isArray(parsed.tradeoffs) ? parsed.tradeoffs : [],
       relaxationOptions: Array.isArray(parsed.relaxationOptions) ? parsed.relaxationOptions : [],
       dataGaps: Array.isArray(parsed.dataGaps) ? parsed.dataGaps : [],
@@ -186,17 +198,23 @@ export function restoreSession(raw: string | null): AgentSession {
       analysisRevision: Number(parsed.analysisRevision || 0),
       items: restoredItems,
       comparison: Array.isArray(parsed.comparison) ? parsed.comparison : [],
-      recommendationReport: currentSchema ? parsed.recommendationReport || null : null,
-      activeRequest: currentSchema ? parsed.activeRequest || null : null,
+      recommendationReport: analysisCompatible ? parsed.recommendationReport || null : null,
+      activeRequest: analysisCompatible ? parsed.activeRequest || null : null,
       marketLookup: parsed.marketLookup || null,
-      storeAreaCode: currentSchema && typeof parsed.storeAreaCode === 'string' ? parsed.storeAreaCode : null,
-      storeAnalysis: currentSchema && parsed.storeAnalysis ? parsed.storeAnalysis : null,
-      selectedStoreId: currentSchema && typeof parsed.selectedStoreId === 'string' ? parsed.selectedStoreId : null,
-      storeRelations: currentSchema && Array.isArray(parsed.storeRelations)
+      storeAreaCode: analysisCompatible && typeof parsed.storeAreaCode === 'string' ? parsed.storeAreaCode : null,
+      storeAnalysis: analysisCompatible && parsed.storeAnalysis ? parsed.storeAnalysis : null,
+      selectedStoreId: analysisCompatible && typeof parsed.selectedStoreId === 'string' ? parsed.selectedStoreId : null,
+      storeRelations: analysisCompatible && Array.isArray(parsed.storeRelations)
         ? parsed.storeRelations
         : ['competitor', 'complementary', 'daily_life', 'other'],
-      storeSearch: currentSchema && typeof parsed.storeSearch === 'string' ? parsed.storeSearch : '',
-      webResearch: currentSchema && Array.isArray(parsed.webResearch) ? parsed.webResearch : [],
+      storeSearch: analysisCompatible && typeof parsed.storeSearch === 'string' ? parsed.storeSearch : '',
+      webResearch: analysisCompatible && Array.isArray(parsed.webResearch) ? parsed.webResearch : [],
+      leaseCandidates: currentSchema && Array.isArray(parsed.leaseCandidates) ? parsed.leaseCandidates : [],
+      leaseFinanceById: currentSchema && parsed.leaseFinanceById && typeof parsed.leaseFinanceById === 'object'
+        ? parsed.leaseFinanceById : {},
+      selectedLeaseCandidateId: currentSchema && typeof parsed.selectedLeaseCandidateId === 'string'
+        ? parsed.selectedLeaseCandidateId : null,
+      financeAreaCode: currentSchema && typeof parsed.financeAreaCode === 'string' ? parsed.financeAreaCode : null,
     }
   } catch {
     return initialSession

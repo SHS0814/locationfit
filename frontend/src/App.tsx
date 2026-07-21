@@ -5,6 +5,7 @@ import { AgentPanel } from './features/agent/AgentPanel'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
+  AGENT_V7_SESSION_KEY,
   AGENT_V6_SESSION_KEY,
   AGENT_V5_SESSION_KEY,
   AGENT_V4_SESSION_KEY,
@@ -21,12 +22,16 @@ import { RecommendationResults } from './features/recommendation/RecommendationR
 import { RecommendationReportView } from './features/recommendation/RecommendationReport'
 import { LeasePlanCard } from './features/recommendation/LeasePlanCard'
 import { AreaStoreExplorer } from './features/stores/AreaStoreExplorer'
+import { LeaseCandidateEditor } from './features/finance/LeaseCandidateEditor'
+import { LeaseCandidateWorkspace } from './features/finance/LeaseCandidateWorkspace'
+import { emptyFinanceState, hasDuplicateSourceUrl, type LeaseCandidateFinanceState, type LeaseCandidateRecord } from './features/finance/model'
 import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption, StoreRelation } from './types/api'
 
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)
+      || sessionStorage.getItem(AGENT_V7_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V6_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V5_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V4_SESSION_KEY)
@@ -41,6 +46,8 @@ export default function App() {
   const [storeLoading, setStoreLoading] = useState(false)
   const [storeError, setStoreError] = useState<string | null>(null)
   const [researchLoadingKey, setResearchLoadingKey] = useState<string | null>(null)
+  const [leaseEditorAreaCode, setLeaseEditorAreaCode] = useState<string | null>(null)
+  const [editingLeaseCandidateId, setEditingLeaseCandidateId] = useState<string | null>(null)
   const recommendationItemsReady = session.items.length > 0 && session.items.every(hasAreaBoundary)
 
   useEffect(() => {
@@ -97,7 +104,7 @@ export default function App() {
         ? draftToRequest(response.draft)
         : preserveAnalysis ? session.activeRequest : null
       const nextSession: AgentSession = {
-        schemaVersion: 7,
+        schemaVersion: 8,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
         draft: response.draft,
         phase: isMarketLookup ? session.phase : response.phase,
@@ -126,6 +133,10 @@ export default function App() {
           : ['competitor', 'complementary', 'daily_life', 'other'],
         storeSearch: preserveAnalysis && !response.recommendations.length ? session.storeSearch : '',
         webResearch: preserveAnalysis && !response.recommendations.length ? session.webResearch : [],
+        leaseCandidates: preserveAnalysis && !response.recommendations.length ? session.leaseCandidates : [],
+        leaseFinanceById: preserveAnalysis && !response.recommendations.length ? session.leaseFinanceById : {},
+        selectedLeaseCandidateId: preserveAnalysis && !response.recommendations.length ? session.selectedLeaseCandidateId : null,
+        financeAreaCode: preserveAnalysis && !response.recommendations.length ? session.financeAreaCode : null,
       }
       setSession(nextSession)
       if (response.recommendations.length) setSelected(response.recommendations[0] || null)
@@ -194,6 +205,7 @@ export default function App() {
         relaxationOptions: [], selectedScenarioId: null, items: [], comparison: [], recommendationReport: null, activeRequest: null, marketLookup: null,
         storeAreaCode: null, storeAnalysis: null, selectedStoreId: null,
         storeRelations: ['competitor', 'complementary', 'daily_life', 'other'], storeSearch: '', webResearch: [],
+        leaseCandidates: [], leaseFinanceById: {}, selectedLeaseCandidateId: null, financeAreaCode: null,
       }
     })
   }
@@ -237,12 +249,17 @@ export default function App() {
       storeRelations: ['competitor', 'complementary', 'daily_life', 'other'],
       storeSearch: '',
       webResearch: [],
+      leaseCandidates: [],
+      leaseFinanceById: {},
+      selectedLeaseCandidateId: null,
+      financeAreaCode: null,
     }))
   }
 
   const resetConversationAndAnalysis = () => {
     if (!window.confirm('대화와 모든 분석 결과를 초기화할까요?')) return
     sessionStorage.removeItem(AGENT_SESSION_KEY)
+    sessionStorage.removeItem(AGENT_V7_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V6_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V5_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V4_SESSION_KEY)
@@ -259,11 +276,13 @@ export default function App() {
     setError(null)
     setLastTurn(null)
     setStoreError(null)
+    setLeaseEditorAreaCode(null)
+    setEditingLeaseCandidateId(null)
   }
 
   const openStoreExplorer = async (item: RecommendationItem) => {
     setStoreError(null)
-    setSession((current) => ({ ...current, storeAreaCode: item.area_code, selectedStoreId: null }))
+    setSession((current) => ({ ...current, storeAreaCode: item.area_code, selectedStoreId: null, financeAreaCode: null }))
     if (session.storeAnalysis?.area_code === item.area_code && session.storeAnalysis.industry_code === item.industry_code) return
     setStoreLoading(true)
     try {
@@ -310,6 +329,68 @@ export default function App() {
   const activeStoreArea = session.storeAreaCode
     ? session.items.find((item) => item.area_code === session.storeAreaCode) || null
     : null
+  const activeFinanceArea = session.financeAreaCode
+    ? session.items.find((item) => item.area_code === session.financeAreaCode) || null
+    : null
+  const leaseEditorArea = leaseEditorAreaCode
+    ? session.items.find((item) => item.area_code === leaseEditorAreaCode) || null
+    : null
+  const editingLeaseCandidate = editingLeaseCandidateId
+    ? session.leaseCandidates.find((item) => item.id === editingLeaseCandidateId) || null
+    : null
+
+  const openLeaseEditor = (areaCode: string, candidateId: string | null = null) => {
+    setLeaseEditorAreaCode(areaCode)
+    setEditingLeaseCandidateId(candidateId)
+  }
+
+  const closeLeaseEditor = () => {
+    setLeaseEditorAreaCode(null)
+    setEditingLeaseCandidateId(null)
+  }
+
+  const saveLeaseCandidate = (candidate: LeaseCandidateRecord): string | null => {
+    if (hasDuplicateSourceUrl(session.leaseCandidates, candidate)) {
+      return '같은 원본 URL의 매물이 이미 후보함에 있습니다. 기존 후보를 편집해주세요.'
+    }
+    setSession((current) => {
+      const exists = current.leaseCandidates.some((item) => item.id === candidate.id)
+      return {
+        ...current,
+        leaseCandidates: exists
+          ? current.leaseCandidates.map((item) => item.id === candidate.id ? candidate : item)
+          : [...current.leaseCandidates, candidate],
+        leaseFinanceById: {
+          ...current.leaseFinanceById,
+          [candidate.id]: exists
+            ? { ...(current.leaseFinanceById[candidate.id] || emptyFinanceState()), plan: null }
+            : current.leaseFinanceById[candidate.id] || emptyFinanceState(),
+        },
+      }
+    })
+    return null
+  }
+
+  const deleteLeaseCandidate = (candidateId: string) => {
+    if (!window.confirm('이 임대매물과 연결된 자금계획을 삭제할까요?')) return
+    setSession((current) => {
+      const leaseFinanceById = { ...current.leaseFinanceById }
+      delete leaseFinanceById[candidateId]
+      return {
+        ...current,
+        leaseCandidates: current.leaseCandidates.filter((item) => item.id !== candidateId),
+        leaseFinanceById,
+        selectedLeaseCandidateId: current.selectedLeaseCandidateId === candidateId ? null : current.selectedLeaseCandidateId,
+      }
+    })
+  }
+
+  const updateLeaseFinance = (candidateId: string, finance: LeaseCandidateFinanceState) => {
+    setSession((current) => ({
+      ...current,
+      leaseFinanceById: { ...current.leaseFinanceById, [candidateId]: finance },
+    }))
+  }
 
   if (!metadata) {
     return <main className="boot-screen"><div className="loader" /><p>{error || '상권 데이터를 불러오는 중입니다.'}</p></main>
@@ -359,7 +440,20 @@ export default function App() {
           <div className="output-area">
             {error && <div className="error-banner" role="alert">{error} {lastTurn && <button type="button" onClick={() => executeTurn(lastTurn, false)}>다시 시도</button>}</div>}
             {storeError && <div className="error-banner" role="alert">{storeError}</div>}
-            {activeStoreArea && session.storeAnalysis?.area_code === activeStoreArea.area_code ? (
+            {activeFinanceArea ? (
+              <LeaseCandidateWorkspace
+                area={activeFinanceArea}
+                candidates={session.leaseCandidates.filter((item) => item.areaCode === activeFinanceArea.area_code)}
+                selectedId={session.selectedLeaseCandidateId}
+                financeById={session.leaseFinanceById}
+                onBack={() => setSession((current) => ({ ...current, financeAreaCode: null }))}
+                onAdd={() => openLeaseEditor(activeFinanceArea.area_code)}
+                onEdit={(id) => openLeaseEditor(activeFinanceArea.area_code, id)}
+                onDelete={deleteLeaseCandidate}
+                onSelect={(selectedLeaseCandidateId) => setSession((current) => ({ ...current, selectedLeaseCandidateId }))}
+                onFinanceChange={updateLeaseFinance}
+              />
+            ) : activeStoreArea && session.storeAnalysis?.area_code === activeStoreArea.area_code ? (
               <AreaStoreExplorer
                 area={activeStoreArea}
                 analysis={session.storeAnalysis}
@@ -368,11 +462,14 @@ export default function App() {
                 selectedStoreId={session.selectedStoreId}
                 research={session.webResearch}
                 researchLoadingKey={researchLoadingKey}
+                leaseCandidateCount={session.leaseCandidates.filter((item) => item.areaCode === activeStoreArea.area_code).length}
                 onBack={() => setSession((current) => ({ ...current, storeAreaCode: null, selectedStoreId: null }))}
                 onRelationsChange={(storeRelations: StoreRelation[]) => setSession((current) => ({ ...current, storeRelations }))}
                 onSearchChange={(storeSearch: string) => setSession((current) => ({ ...current, storeSearch }))}
                 onSelectStore={(selectedStoreId: string | null) => setSession((current) => ({ ...current, selectedStoreId }))}
                 onResearch={runWebResearch}
+                onAddLeaseCandidate={() => openLeaseEditor(activeStoreArea.area_code)}
+                onOpenLeaseCandidates={() => setSession((current) => ({ ...current, financeAreaCode: activeStoreArea.area_code }))}
               />
             ) : storeLoading ? (
               <div className="empty-state"><div className="loader" /><h2>상권 내부 영업 업소를 불러오는 중입니다</h2><p>상권 경계와 공공 API 데이터를 연결하고 있습니다.</p></div>
@@ -398,6 +495,7 @@ export default function App() {
           </div>
         </section>
       </main>
+      {leaseEditorArea && <LeaseCandidateEditor area={leaseEditorArea} existing={editingLeaseCandidate} onClose={closeLeaseEditor} onSave={saveLeaseCandidate} />}
       <footer>KB AI Challenge · 서울 열린데이터광장·소상공인시장진흥공단 기반 분석 · 미래 매출을 보장하지 않습니다.</footer>
     </div>
   )

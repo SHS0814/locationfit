@@ -24,10 +24,12 @@ describe('agent session model', () => {
       activeRequest: draftToRequest(draft),
     }))
     expect(restored.draft.industry_code).toBe('CS100001')
-    expect(restored.schemaVersion).toBe(7)
+    expect(restored.schemaVersion).toBe(8)
     expect(restored.recommendationReport).toBeNull()
     expect(restored.context.discovery_question_count).toBe(0)
     expect(restored.storeRelations).toEqual(['competitor', 'complementary', 'daily_life', 'other'])
+    expect(restored.leaseCandidates).toEqual([])
+    expect(restored.phase).toBe('ready_for_confirmation')
     expect(restoreSession('{broken').phase).toBe('discovering')
   })
 
@@ -43,6 +45,29 @@ describe('agent session model', () => {
     }))
     expect(restored.items).toEqual([])
     expect(restored.activeRequest?.industry_code).toBe('CS100001')
+  })
+
+  it('restores v8 lease candidates and their finance state', () => {
+    const draft = { ...emptyDraft, industry_code: 'CS100001' }
+    const financeState = {
+      additionalCosts: { interior_krw: 0, equipment_krw: 0, initial_inventory_krw: 0, working_capital_krw: 0, other_krw: 0 },
+      eligibility: { own_capital_krw: 10_000_000, business_status: 'pre_startup', business_age_months: null, is_small_business: null, vulnerability: 'unknown', has_policy_excluded_industry: null },
+      plan: null,
+    }
+    const restored = restoreSession(JSON.stringify({
+      schemaVersion: 8,
+      history: [{ role: 'user', content: '매물 후보' }],
+      draft,
+      phase: 'results',
+      items: [],
+      leaseCandidates: [{ id: 'listing-1', areaCode: 'A1', title: '테스트 매물' }],
+      leaseFinanceById: { 'listing-1': financeState },
+      selectedLeaseCandidateId: 'listing-1',
+      financeAreaCode: 'A1',
+    }))
+    expect(restored.leaseCandidates).toHaveLength(1)
+    expect(restored.leaseFinanceById['listing-1'].eligibility.own_capital_krw).toBe(10_000_000)
+    expect(restored.selectedLeaseCandidateId).toBe('listing-1')
   })
 
   it('keeps an industry-only draft ready after strategy selection', () => {
@@ -69,7 +94,7 @@ describe('agent session model', () => {
       draft: { ...emptyDraft, commercial_property_type: 'small_retail', floor: 'f2' },
       phase: 'results',
     }))
-    expect(restored.schemaVersion).toBe(7)
+    expect(restored.schemaVersion).toBe(8)
     expect(restored.draft.floor).toBeNull()
     expect('commercial_property_type' in restored.draft).toBe(false)
     expect(restored.phase).toBe('discovering')

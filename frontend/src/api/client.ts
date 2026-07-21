@@ -1,4 +1,4 @@
-import type { AgentTurnRequest, AgentTurnResponse, ApiErrorBody, AreaStoresResponse, LeasePlanRequest, LeasePlanResponse, MetadataResponse, RecommendationRequest, RecommendationResponse, WebResearchRequest, WebResearchResponse } from '../types/api'
+import type { AgentTurnRequest, AgentTurnResponse, ApiErrorBody, AreaStoresResponse, FinancePlanRequest, FinancePlanResponse, LeaseCandidateExtractRequest, LeaseCandidateExtractResponse, LeasePlanRequest, LeasePlanResponse, MetadataResponse, RecommendationRequest, RecommendationResponse, WebResearchRequest, WebResearchResponse } from '../types/api'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '')
 
@@ -46,6 +46,16 @@ export const api = {
     request<AreaStoresResponse>(`/areas/${encodeURIComponent(areaCode)}/stores?industry_code=${encodeURIComponent(industryCode)}`),
   webResearch: (payload: WebResearchRequest) =>
     request<WebResearchResponse>('/agent/web-research', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  extractLeaseCandidate: (payload: LeaseCandidateExtractRequest) =>
+    request<LeaseCandidateExtractResponse>('/lease-candidates/extract', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  financePlan: (payload: FinancePlanRequest) =>
+    request<FinancePlanResponse>('/finance/plans', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

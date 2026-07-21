@@ -21,7 +21,10 @@ def error_response(status_code: int, code: str, message: str, request_id: str | 
 
 async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
     message = str(exc)
-    code = "NO_ELIGIBLE_CANDIDATES" if "추천 후보가 없습니다" in message else "INVALID_RECOMMENDATION_REQUEST"
+    if request.url.path.endswith("/lease-candidates/extract"):
+        code = "INVALID_LEASE_CANDIDATE_SOURCE"
+    else:
+        code = "NO_ELIGIBLE_CANDIDATES" if "추천 후보가 없습니다" in message else "INVALID_RECOMMENDATION_REQUEST"
     return error_response(422, code, message, getattr(request.state, "request_id", None))
 
 
