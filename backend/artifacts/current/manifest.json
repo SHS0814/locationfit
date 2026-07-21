@@ -1,7 +1,7 @@
 {
-  "artifact_version": "2025q4-v1",
-  "schema_version": 2,
-  "created_at": "2026-07-16T14:46:12.972515+00:00",
+  "artifact_version": "2025q4-v2",
+  "schema_version": 3,
+  "created_at": "2026-07-20T12:14:02.117554+00:00",
   "coordinate_reference": {
     "source": "EPSG:5181",
     "target": "EPSG:4326"
@@ -29,13 +29,9 @@
       "sha256": "76050f6d6e33bb0f940fc66c785ac4a2b3941d7ac17120e5dc73906059154fb4"
     },
     "commercial_rent_observations.parquet": {
-      "rows": 6670,
-      "sha256": "a5b9c5f79b3dd9168c47c20586d94a5d31cac9476df6c30b1c2333e68d23d260"
-    },
-    "commercial_rent_crosswalk.parquet": {
-      "rows": 4950,
-      "sha256": "4abec10aed76ed9d53160d84955689093b39614dd7d299746b74277dc8f3a1b3"
+      "rows": 14791,
+      "sha256": "74f47130c7ba8e8d82ea0e77ea8330110d14562a0e210fefb4c156f185480e44"
     }
   },
-  "commercial_rent_source": "한국부동산원 R-ONE 상업용부동산 임대동향조사"
+  "commercial_rent_source": "서울시 상권분석서비스 임대시세(서울신용보증재단 보증 고객 통계)"
 }

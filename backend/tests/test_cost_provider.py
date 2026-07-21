@@ -23,30 +23,26 @@ ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "artifacts/current"
 
 def sample_provider(area_codes: list[str]) -> ParquetCommercialCostProvider:
     observations = pd.DataFrame([{
-        "property_type": property_type,
-        "survey_area_name": "테스트 표본상권",
-        "floor": "f1",
+        "area_code": code,
+        "area_name": f"테스트 상권 {code}",
+        "admin_dong_name": "테스트동",
+        "rent_basis_geography": "admin_dong",
+        "rent_basis_name": "테스트동",
+        "floor": floor,
         "reference_period": "2026Q1",
         "unit_converted_rent_krw_sqm": 50_000.0,
-        "floor_utility_ratio": 1.0,
-        "annual_conversion_rate": 0.06,
-    } for property_type in ("small_retail", "medium_large_retail")])
-    crosswalk = pd.DataFrame([{
-        "area_code": code,
-        "property_type": property_type,
-        "survey_area_name": "테스트 표본상권",
-        "distance_km": index / 10,
-    } for index, code in enumerate(area_codes) for property_type in (
-        "small_retail", "medium_large_retail",
-    )])
-    return ParquetCommercialCostProvider(observations, crosswalk)
+        "annual_conversion_rate": 0.12,
+    } for code in area_codes for floor in ("all", "f1")])
+    return ParquetCommercialCostProvider(observations)
 
 
 def test_estimate_budget_fit_and_lease_plan_formulas() -> None:
     provider = sample_provider(["A"])
-    estimate = provider.estimate("A", "medium_large_retail", "f1", 60)
+    estimate = provider.estimate("A", "f1", 60)
     assert estimate is not None
     assert estimate.estimated_converted_monthly_rent_krw == 3_000_000
+    assert estimate.admin_dong_name == "테스트동"
+    assert estimate.geography_fallback_used is False
     assert calculate_budget_fit(2_400_000, 3_000_000) == 80
     assert calculate_budget_fit(4_000_000, 3_000_000) == 100
 
@@ -55,11 +51,19 @@ def test_estimate_budget_fit_and_lease_plan_formulas() -> None:
         deposit_krw=100_000_000,
         total_startup_budget_krw=200_000_000,
     )
-    assert plan.cash_monthly_rent_krw == 2_500_000
-    assert plan.annual_cash_rent_krw == 30_000_000
-    assert plan.first_year_cash_outlay_krw == 130_000_000
-    assert plan.remaining_startup_budget_krw == 70_000_000
+    assert plan.cash_monthly_rent_krw == 2_000_000
+    assert plan.annual_cash_rent_krw == 24_000_000
+    assert plan.first_year_cash_outlay_krw == 124_000_000
+    assert plan.remaining_startup_budget_krw == 76_000_000
     assert plan.deposit_share_of_budget == 0.5
+
+
+def test_missing_floor_uses_same_period_all_floor_with_disclosure() -> None:
+    estimate = sample_provider(["A"]).estimate("A", "non_f1", 33)
+    assert estimate is not None
+    assert estimate.floor == "non_f1"
+    assert estimate.rent_basis_floor == "all"
+    assert estimate.fallback_used is True
 
 
 def test_no_budget_and_total_budget_only_preserve_ranking_and_scores() -> None:
@@ -96,7 +100,6 @@ def test_monthly_limit_applies_twenty_percent_budget_score_without_filtering() -
         top_n=5,
         monthly_converted_rent_limit_krw=2_400_000,
         rentable_area_sqm=60,
-        commercial_property_type="medium_large_retail",
         floor="f1",
     )
     items, diagnostics = service.recommend(request)
@@ -118,7 +121,6 @@ def test_report_compares_rent_with_all_eligible_candidate_median() -> None:
         target_age_groups=["20"],
         top_n=3,
         rentable_area_sqm=60,
-        commercial_property_type="medium_large_retail",
         floor="f1",
     )
     items, _, report = service.recommend_with_report(request)
@@ -158,6 +160,12 @@ def test_request_requires_complete_rent_conditions_for_monthly_limit() -> None:
             target_age_groups=["20"],
             monthly_converted_rent_limit_krw=3_000_000,
         )
+    with pytest.raises(ValueError):
+        RecommendationRequestSchema.model_validate({
+            "industry_code": "CS100001",
+            "target_age_groups": ["20"],
+            "commercial_property_type": "small_retail",
+        })
 
 
 def test_lease_plan_api_uses_static_provider() -> None:
@@ -169,29 +177,26 @@ def test_lease_plan_api_uses_static_provider() -> None:
         app.state.recommender = recommender
         response = client.post("/api/v1/commercial-costs/lease-plan", json={
             "area_code": "A",
-            "commercial_property_type": "medium_large_retail",
             "floor": "f1",
             "rentable_area_sqm": 60,
             "deposit_krw": 100_000_000,
             "total_startup_budget_krw": 200_000_000,
         })
     assert response.status_code == 200
-    assert response.json()["lease_plan"]["cash_monthly_rent_krw"] == 2_500_000
+    assert response.json()["lease_plan"]["cash_monthly_rent_krw"] == 2_000_000
 
 
 def test_parquet_loader_verifies_manifest_checksum(tmp_path: Path) -> None:
     provider = sample_provider(["A"])
     observation_path = tmp_path / "commercial_rent_observations.parquet"
-    crosswalk_path = tmp_path / "commercial_rent_crosswalk.parquet"
     provider.observations.to_parquet(observation_path, index=False)
-    provider.crosswalk.to_parquet(crosswalk_path, index=False)
-    files = {}
-    for path in (observation_path, crosswalk_path):
-        files[path.name] = {"sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+    files = {
+        observation_path.name: {"sha256": hashlib.sha256(observation_path.read_bytes()).hexdigest()}
+    }
     (tmp_path / "manifest.json").write_text(json.dumps({"files": files}), encoding="utf-8")
 
     loaded = ParquetCommercialCostProvider.from_artifact_dir(tmp_path)
-    assert loaded.estimate("A", "medium_large_retail", "f1", 60) is not None
+    assert loaded.estimate("A", "f1", 60) is not None
     observation_path.write_bytes(observation_path.read_bytes() + b"corrupt")
     with pytest.raises(RuntimeError, match="체크섬"):
         ParquetCommercialCostProvider.from_artifact_dir(tmp_path)

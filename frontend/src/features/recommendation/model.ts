@@ -26,7 +26,6 @@ export const emptyRecommendationRequest: RecommendationRequest = {
   total_startup_budget_krw: null,
   monthly_converted_rent_limit_krw: null,
   rentable_area_sqm: null,
-  commercial_property_type: null,
   floor: null,
 }
 

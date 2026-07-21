@@ -3,14 +3,13 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.schemas.recommendation import RentalEstimateSchema
-from backend.app.services.cost_provider import FloorType, PropertyType
+from backend.app.services.cost_provider import FloorType
 
 
 class LeasePlanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     area_code: str = Field(min_length=1)
-    commercial_property_type: PropertyType
     floor: FloorType
     rentable_area_sqm: float = Field(gt=0, le=10_000)
     deposit_krw: float | None = Field(default=None, ge=0)

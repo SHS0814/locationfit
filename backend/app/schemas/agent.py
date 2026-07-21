@@ -10,7 +10,7 @@ from backend.app.schemas.recommendation import (
     RecommendationRequestSchema,
     RentalEstimateSchema,
 )
-from backend.app.services.cost_provider import FloorType, PropertyType
+from backend.app.services.cost_provider import FloorType
 
 
 class AgentMessage(BaseModel):
@@ -74,7 +74,6 @@ class RecommendationDraft(BaseModel):
     total_startup_budget_krw: float | None = Field(default=None, gt=0)
     monthly_converted_rent_limit_krw: float | None = Field(default=None, gt=0)
     rentable_area_sqm: float | None = Field(default=None, gt=0, le=10_000)
-    commercial_property_type: PropertyType | None = None
     floor: FloorType | None = None
 
     def to_request(self) -> RecommendationRequestSchema:

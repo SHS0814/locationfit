@@ -9,7 +9,12 @@ def test_health_metadata_and_recommendation_contract() -> None:
         assert client.get("/api/v1/health/ready").status_code == 200
         metadata = client.get("/api/v1/metadata")
         assert metadata.status_code == 200
-        assert metadata.json()["artifact_version"] == "2025q4-v1"
+        assert metadata.json()["artifact_version"] == "2025q4-v2"
+        assert metadata.json()["rent_floors"] == [
+            {"code": "all", "name": "전체 층 평균"},
+            {"code": "f1", "name": "1층"},
+            {"code": "non_f1", "name": "1층 외"},
+        ]
 
         response = client.post(
             "/api/v1/recommendations",

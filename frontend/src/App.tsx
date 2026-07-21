@@ -5,6 +5,7 @@ import { AgentPanel } from './features/agent/AgentPanel'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
+  AGENT_V5_SESSION_KEY,
   AGENT_V4_SESSION_KEY,
   AGENT_V2_SESSION_KEY,
   AGENT_V3_SESSION_KEY,
@@ -24,6 +25,7 @@ export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)
+      || sessionStorage.getItem(AGENT_V5_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V4_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V3_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V2_SESSION_KEY)
@@ -89,7 +91,7 @@ export default function App() {
         ? draftToRequest(response.draft)
         : preserveAnalysis ? session.activeRequest : null
       const nextSession: AgentSession = {
-        schemaVersion: 5,
+        schemaVersion: 6,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
         draft: response.draft,
         phase: isMarketLookup ? session.phase : response.phase,
@@ -219,6 +221,7 @@ export default function App() {
   const resetConversationAndAnalysis = () => {
     if (!window.confirm('대화와 모든 분석 결과를 초기화할까요?')) return
     sessionStorage.removeItem(AGENT_SESSION_KEY)
+    sessionStorage.removeItem(AGENT_V5_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V4_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V3_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V2_SESSION_KEY)

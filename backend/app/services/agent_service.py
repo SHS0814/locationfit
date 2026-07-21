@@ -59,7 +59,7 @@ SYSTEM_INSTRUCTIONS = """
 1. 사용자의 자연어를 제공된 코드, RecommendationDraft, FounderContext에만 매핑한다.
 2. current_draft와 current_context의 기존 값을 보존하되 사용자가 명확하게 말한 조건만 구조화 필드에 고정한다. 업종·고객·시간·지역·예산 등을 추론해서 구조화 필드에 넣지 않는다.
 3. 업종이 없을 때만 업종을 질문한다. 업종이 있으면 고객·성별·연령·운영시간·지역·상권유형·위험 선호·예산 같은 선택 조건을 추가로 질문하지 않는다. 비어 있는 선택 조건은 제한 없음으로 두고 바로 데이터 탐색 단계로 진행한다.
-3-1. 사용자가 총 창업예산, 월 환산임대료 한도, 임대면적, 상가 유형, 층을 말하면 구조화 필드에 저장한다. 월 한도가 있는데 임대면적·상가 유형·층 중 하나라도 없으면 한 번의 질문으로 필요한 임대조건을 확인한다.
+3-1. 사용자가 총 창업예산, 월 환산임대료 한도, 임대면적, 층 구분(전체 층 평균/1층/1층 외)을 말하면 구조화 필드에 저장한다. 월 한도가 있는데 임대면적이나 층 구분이 없으면 한 번의 질문으로 필요한 임대조건을 확인한다.
 4. 사용자가 명시하지 않은 선택 조건은 구조화 필드에 추론해 넣지 않는다. 빈 연령은 10대~60대 이상 전체, 빈 성별은 전체 성별, 빈 시간대·지역·상권유형은 각각 전체 범위라는 뜻이며 서비스가 assumptions에 inferred로 표시한다.
 5. 조건이 충분하면 데이터 탐색을 시작한다고 안내한다. 추천 실행이나 탐색 수치를 미리 말하지 않는다.
 6. recommend_confirmed_areas는 확인 액션에서 제공될 때 정확히 한 번 호출한다. 도구가 없으면 추천을 실행했다고 말하지 않는다.
@@ -187,7 +187,7 @@ class OpenAIAgentRunner:
             "area_types": metadata["area_types"],
             "age_groups": metadata["age_groups"],
             "time_bands": metadata["time_bands"],
-            "commercial_property_types": metadata["commercial_property_types"],
+            "rent_floors": metadata["rent_floors"],
         }
         run_input = json.dumps(
             {
@@ -457,7 +457,7 @@ class LocationAgentService:
 
     @staticmethod
     def _context_ready(draft: RecommendationDraft) -> bool:
-        rent_fields = (draft.rentable_area_sqm, draft.commercial_property_type, draft.floor)
+        rent_fields = (draft.rentable_area_sqm, draft.floor)
         rent_ready = not any(value is not None for value in rent_fields) or all(
             value is not None for value in rent_fields
         )
@@ -469,12 +469,12 @@ class LocationAgentService:
     def _next_question(draft: RecommendationDraft) -> str:
         if not draft.industry_code:
             return "어떤 업종이나 가게를 준비하고 계신가요? 메뉴나 서비스까지 편하게 말씀해주세요."
-        rent_fields = (draft.rentable_area_sqm, draft.commercial_property_type, draft.floor)
+        rent_fields = (draft.rentable_area_sqm, draft.floor)
         if (
             draft.monthly_converted_rent_limit_krw is not None
             or any(value is not None for value in rent_fields)
         ) and not all(value is not None for value in rent_fields):
-            return "임대료를 추정하려면 공용면적을 포함한 임대면적, 상가 유형, 원하는 층을 알려주세요."
+            return "임대료를 추정하려면 공용면적을 포함한 임대면적과 층 구분(전체 층 평균, 1층, 1층 외)을 알려주세요."
         return "어떤 업종이나 가게를 준비하고 계신가요?"
 
     def _apply_broad_assumptions(
@@ -588,9 +588,9 @@ class LocationAgentService:
         if not draft.industry_code:
             missing.append("industry_code")
         if draft.monthly_converted_rent_limit_krw is not None or any((
-            draft.rentable_area_sqm, draft.commercial_property_type, draft.floor,
+            draft.rentable_area_sqm, draft.floor,
         )):
-            for field in ("rentable_area_sqm", "commercial_property_type", "floor"):
+            for field in ("rentable_area_sqm", "floor"):
                 if getattr(draft, field) is None:
                     missing.append(field)
                 if len(missing) >= 3:
@@ -612,10 +612,11 @@ class LocationAgentService:
             parts.append(f"총 창업예산 {draft.total_startup_budget_krw:,.0f}원")
         if draft.monthly_converted_rent_limit_krw:
             parts.append(f"월 환산임대료 한도 {draft.monthly_converted_rent_limit_krw:,.0f}원")
-        if draft.rentable_area_sqm and draft.commercial_property_type and draft.floor:
+        if draft.rentable_area_sqm and draft.floor:
+            floor_names = {"all": "전체 층 평균", "f1": "1층", "non_f1": "1층 외"}
             parts.append(
                 f"임대면적 {draft.rentable_area_sqm:g}㎡ · "
-                f"{draft.commercial_property_type} · {draft.floor}"
+                f"{floor_names[draft.floor]}"
             )
         importance_labels = {
             "floating_population_importance": "유동인구",

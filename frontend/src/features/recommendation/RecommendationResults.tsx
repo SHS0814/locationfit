@@ -32,7 +32,9 @@ export function RecommendationResults({ items, selectedCode, onSelect }: Props) 
               {item.rental_estimate && (
                 <p className="rent-summary">
                   환산 월 {formatWon(item.rental_estimate.estimated_converted_monthly_rent_krw)}
-                  {' · '}{item.rental_estimate.survey_area_name} 표본상권 {item.rental_estimate.survey_area_distance_km.toFixed(1)}km 기준
+                  {' · '}{item.rental_estimate.rent_basis_name} · {item.rental_estimate.rent_basis_geography === 'district' ? '자치구' : '행정동'} 기준 · {floorName(item.rental_estimate.rent_basis_floor)}
+                  {item.rental_estimate.fallback_used && ' (전체 층 평균 대체)'}
+                  {item.rental_estimate.geography_fallback_used && ' (자치구 기준 대체)'}
                 </p>
               )}
               {item.budget_fit_score != null && <span className="budget-fit">예산 적합 {item.budget_fit_score.toFixed(1)}점</span>}
@@ -51,4 +53,8 @@ export function RecommendationResults({ items, selectedCode, onSelect }: Props) 
 
 function formatWon(value: number): string {
   return `${Math.round(value).toLocaleString('ko-KR')}원`
+}
+
+function floorName(floor: 'all' | 'f1' | 'non_f1'): string {
+  return floor === 'all' ? '전체 층 평균' : floor === 'f1' ? '1층' : '1층 외'
 }

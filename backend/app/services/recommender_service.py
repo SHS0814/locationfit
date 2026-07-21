@@ -37,7 +37,6 @@ TIME_OPTIONS = [
 ]
 DEFAULT_RENT_REFERENCE = {
     "rentable_area_sqm": 33.05785,
-    "commercial_property_type": "small_retail",
     "floor": "f1",
 }
 
@@ -124,7 +123,7 @@ class RecommenderService:
             ],
             "age_groups": AGE_OPTIONS,
             "time_bands": TIME_OPTIONS,
-            "commercial_property_types": self.cost_provider.options(),
+            "rent_floors": self.cost_provider.options(),
         }
 
     def lookup_market_rankings(
@@ -151,7 +150,7 @@ class RecommenderService:
     def _run_recommendation(self, payload: RecommendationRequestSchema) -> RecommendationResult:
         values = payload.model_dump(exclude={
             "total_startup_budget_krw", "monthly_converted_rent_limit_krw",
-            "rentable_area_sqm", "commercial_property_type", "floor",
+            "rentable_area_sqm", "floor",
         })
         for field in (
             "preferred_area_types", "target_age_groups", "preferred_time_bands",
@@ -165,13 +164,11 @@ class RecommenderService:
     def _estimate(self, area_code: str, payload: RecommendationRequestSchema):
         if (
             payload.rentable_area_sqm is None
-            or payload.commercial_property_type is None
             or payload.floor is None
         ):
             return None
         return self.cost_provider.estimate(
             area_code,
-            payload.commercial_property_type,
             payload.floor,
             payload.rentable_area_sqm,
         )
@@ -307,7 +304,6 @@ class RecommenderService:
         eligible = result.eligible_candidates.copy()
         has_rent_conditions = all((
             payload.rentable_area_sqm is not None,
-            payload.commercial_property_type is not None,
             payload.floor is not None,
         ))
         rental_payload = payload if has_rent_conditions else payload.model_copy(
@@ -315,9 +311,9 @@ class RecommenderService:
         )
         rental_basis = (
             f"입력 조건 · {float(rental_payload.rentable_area_sqm):g}㎡ · "
-            f"{rental_payload.commercial_property_type} · {rental_payload.floor}"
+            f"{rental_payload.floor}"
             if has_rent_conditions
-            else "기본 참고값 · 소규모 상가 · 1층 · 10평(33.1㎡)"
+            else "기본 참고값 · 1층 · 10평(33.1㎡)"
         )
 
         def metric_values(row: dict[str, Any]) -> dict[str, Any]:

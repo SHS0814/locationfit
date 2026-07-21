@@ -28,7 +28,6 @@ export function LeasePlanCard({ item, totalStartupBudgetKrw }: Props) {
     try {
       const response = await api.leasePlan({
         area_code: item.area_code,
-        commercial_property_type: estimate.property_type,
         floor: estimate.floor,
         rentable_area_sqm: estimate.rentable_area_sqm,
         deposit_krw: depositManwon ? Number(depositManwon) * 10_000 : null,
@@ -49,7 +48,9 @@ export function LeasePlanCard({ item, totalStartupBudgetKrw }: Props) {
         <h2 id="lease-plan-title">{item.area_name} 임대 계획</h2>
         <p>
           환산 월 점유비용 <strong>{formatWon(estimate.estimated_converted_monthly_rent_krw)}</strong>
-          {' · '}{estimate.survey_area_name} 표본상권 {estimate.survey_area_distance_km.toFixed(1)}km 기준
+          {' · '}{estimate.rent_basis_name} · {estimate.rent_basis_geography === 'district' ? '자치구' : '행정동'} 기준 · {floorName(estimate.rent_basis_floor)}
+          {estimate.fallback_used && ' (전체 층 평균 대체)'}
+          {estimate.geography_fallback_used && ' (자치구 기준 대체)'}
         </p>
       </div>
       <div className="lease-plan-input">
@@ -78,4 +79,8 @@ function formatWon(value: number): string {
 
 function formatNullableWon(value: number | null): string {
   return value == null ? '-' : formatWon(value)
+}
+
+function floorName(floor: 'all' | 'f1' | 'non_f1'): string {
+  return floor === 'all' ? '전체 층 평균' : floor === 'f1' ? '1층' : '1층 외'
 }
