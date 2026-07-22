@@ -2,6 +2,50 @@
 
 프런트엔드와 백엔드는 독립적으로 배포한다.
 
+## 협업용 Docker Compose
+
+서버 배포 전 로컬 협업 환경은 저장소 루트의 `compose.yaml`을 사용한다. 백엔드는
+FastAPI 개발 서버, 프런트엔드는 Vite 개발 서버로 실행해 코드 변경을 바로 반영한다.
+
+처음 실행:
+
+```bash
+cp .env.docker.example .env.docker
+docker compose up --build
+```
+
+기본 접속 주소:
+
+- 웹: `http://localhost:5173`
+- API 상태: `http://localhost:8000/api/v1/health/live`
+- API 문서: `http://localhost:8000/docs`
+
+자주 쓰는 명령:
+
+```bash
+docker compose up
+docker compose up --build
+docker compose down
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+AI 상담, 웹 검색, 상권 내 점포 조회까지 확인하려면 `.env.docker`에 아래 값을 채운다.
+비워 두어도 기본 추천 API와 화면 개발은 가능하다.
+
+```bash
+OPENAI_API_KEY=<OpenAI API 키>
+DATA_GO_KR_SERVICE_KEY=<공공데이터포털 인증키>
+```
+
+`frontend` 서비스는 컨테이너 시작 시 `npm ci`를 실행하고, `node_modules`는 Docker named
+volume에 저장한다. 프런트 의존성이 꼬이면 아래처럼 볼륨까지 지운 뒤 다시 띄운다.
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 ## Frontend
 
 - 빌드 위치: `frontend/`

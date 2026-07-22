@@ -1,0 +1,40 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - ${APP_ENV_FILE:-.env.docker}
+    command:
+      - uvicorn
+      - backend.app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app/frontend
+    env_file:
+      - ${APP_ENV_FILE:-.env.docker}
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - frontend_node_modules:/app/frontend/node_modules
+
+volumes:
+  frontend_node_modules:
