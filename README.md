@@ -72,6 +72,65 @@ STORE_API_TIMEOUT_SECONDS=15
 - 정책 출처: 중소벤처기업부 `2026년 소상공인 정책자금 융자사업 공고(3차 변경)`, 서민금융진흥원 창업·운영자금 공식 안내
 - OpenAI 추출 제한 시간은 `LISTING_EXTRACTION_TIMEOUT_SECONDS`로 조정한다.
 
+### 금융지원 상품 카탈로그 DB
+
+은행대출·정책자금·지원사업·보증상품의 현재 정보를 담기 위한 PostgreSQL 스키마가
+준비되어 있다. 초기 33개 검수 데이터와 기업마당 API 수집 결과를 preview한 뒤
+승인 반영하는 적재 도구까지 제공한다. 다만 `POST /api/v1/finance/plans`는 아직 이
+카탈로그를 조회하지 않으며 기존 결정론적 후보 판정을 그대로 유지한다.
+
+로컬 DB와 최초 스키마를 준비한다.
+
+```bash
+cp .env.docker.example .env.docker
+cp .env.postgres.example .env.postgres
+# 최초 실행 전에 두 파일의 PostgreSQL 비밀번호를 같은 임의 값으로 변경
+docker compose up -d db
+docker compose run --rm backend alembic -c backend/alembic.ini upgrade head
+docker compose run --rm backend alembic -c backend/alembic.ini current
+```
+
+호스트에서 직접 실행할 때는 `.env.example`의 `DATABASE_URL`을 사용한다.
+
+```bash
+.venv/bin/alembic -c backend/alembic.ini upgrade head
+```
+
+- 추천 모델과 서울 상권 데이터는 기존 Parquet 아티팩트를 계속 사용한다.
+- PostgreSQL은 금융지원 기관·상품·혜택·자격조건·공식 출처 카탈로그만 담당한다.
+- 자격조건 그룹 간에는 OR, 한 그룹 안의 조건 간에는 AND 의미를 갖는다.
+- 상품 조건 변경 시 과거 리비전을 만들지 않고 현재 행과 확인시각을 갱신한다.
+
+초기 검수 카탈로그에는 2026-07-24 공식 안내 기준으로 KB국민은행 5종, 소상공인
+정책자금 11종, 서울시 중소기업육성자금 16종, 신용보증재단중앙회 보증 연계 사업
+1종이 정의되어 있다. 금액·금리 등 공식 원문에서 구조적으로 확정하지 못한 값은
+0으로 추정하지 않고 `null`로 유지한다. 서울시 안심통장은 별도 시행공고의 현재
+상태를 추가 확인해야 하므로 `unknown` 상태다.
+
+검수 데이터와 기업마당 API 결과는 DB에 바로 쓰지 않는다. 먼저 preview에서 원본,
+검증 결과와 DB diff를 확인한 뒤 해당 실행 디렉터리를 명시해 반영한다.
+
+```bash
+# 검수 YAML만 비교
+.venv/bin/python scripts/manage_financial_catalog.py preview --source curated
+
+# 기업마당 금융·서울·소상공인 공고 포함(BIZINFO_API_KEY 필요)
+.venv/bin/python scripts/manage_financial_catalog.py preview --source all
+
+# 출력된 경로의 diff.json과 validation.json 검토 후 반영
+.venv/bin/python scripts/manage_financial_catalog.py apply \
+  --run-dir outputs/financial_catalog/<UTC실행시각>
+
+# 현재 DB 품질 확인
+.venv/bin/python scripts/manage_financial_catalog.py validate
+```
+
+- 기업마당 API 키는 `BIZINFO_API_KEY`에만 저장하며 원본·manifest·로그에는 기록하지 않는다.
+- 기업마당은 금융 분야이면서 서울 적용 및 소상공인·개인사업자·창업자 대상인 공고만 포함한다.
+- API 본문의 금액·금리 문장은 자동 수치화하지 않고 검수 YAML로 보강한 값만 사용한다.
+- 같은 공고가 여러 세부자금의 출처이면 `source_aliases.yaml`로 명시적으로 연결한다.
+- 권장 확인 주기는 기업마당 매일, KB·정책자금·보증상품 주 1회다. 스케줄러는 별도다.
+
 서비스 아티팩트를 다시 만들려면 저장소 루트에서 아래 명령을 실행한다.
 
 ```bash
@@ -83,7 +142,7 @@ STORE_API_TIMEOUT_SECONDS=15
 - `growth`: 조건 적합 45%, 성장 중심 성과 근거 55%
 - `stability`: 조건 적합 45%, 안정성 중심 성과 근거 55%
 
-상담 중 서울 열린데이터나 서울시 상권분석서비스를 실시간 호출하지 않으며 배포 아티팩트만 읽는다. 데이터베이스는 사용하지 않는다. 추천 지도는 서울시 `상권분석서비스(영역-상권)` SHP(EPSG:5181)를 WGS84로 변환한 실제 Polygon/MultiPolygon 경계를 표시한다. 월 환산임대료 한도와 임대면적·층 구분을 모두 입력하면 기존 종합점수 80%와 임대예산 적합도 20%를 결합해 재정렬한다. 총 창업예산만 입력하거나 예산을 입력하지 않으면 기존 순위와 점수를 유지한다.
+상담 중 서울 열린데이터나 서울시 상권분석서비스를 실시간 호출하지 않으며 배포 아티팩트만 읽는다. 추천 엔진은 데이터베이스를 사용하지 않는다. 추천 지도는 서울시 `상권분석서비스(영역-상권)` SHP(EPSG:5181)를 WGS84로 변환한 실제 Polygon/MultiPolygon 경계를 표시한다. 월 환산임대료 한도와 임대면적·층 구분을 모두 입력하면 기존 종합점수 80%와 임대예산 적합도 20%를 결합해 재정렬한다. 총 창업예산만 입력하거나 예산을 입력하지 않으면 기존 순위와 점수를 유지한다.
 
 서비스 아티팩트를 다시 만들 때는 서울 열린데이터광장 OA-15560의 `서울시 상권분석서비스(영역-상권).zip`을 풀어 SHP 구성 파일을 `data/raw/area/`에 둔다. 빌드 결과인 `area_boundaries.parquet`에는 1,650개 상권코드별 GeoJSON 경계가 저장된다.
 

@@ -1,0 +1,246 @@
+catalog_version: 1
+products:
+  - slug: semas-2026-general-management-stability
+    name: 2026 일반경영안정자금
+    product_type: policy_fund
+    status: active
+    summary: 업력과 관계없이 일반 소상공인의 경영안정을 지원하는 정책자금입니다.
+    application_url: &semas_url https://www.mss.go.kr/site/smba/ex/bbs/View.do?bcIdx=1069735&cbIdx=310
+    last_checked_at: &checked 2026-07-24T00:00:00+09:00
+    extra_data: &semas_extra
+      funding_purposes: [working_capital]
+      rate_basis: policy_base_rate
+      application_channels: [소상공인정책자금]
+      closing_condition: 예산 소진시까지
+      category: 일반경영안정자금
+      curation_level: official_announcement
+    organization_roles: &semas_roles
+      - organization_code: mss
+        role: authority
+      - organization_code: semas
+        role: operator
+    benefits:
+      - &policy_loan
+        benefit_type: loan
+        original_text: 한도·금리·기간은 2026년 3차 변경 공고의 세부자금 조건을 확인해야 합니다.
+    eligibility_groups:
+      - &common_group
+        name: 정책자금 공통대상
+        description: 세부 심사·제외업종은 공고문 확인이 필요합니다.
+        rules:
+          - field_key: region_code
+            operator: in
+            value: [KR]
+            description: 전국 대상 정책자금입니다.
+          - field_key: is_small_business
+            operator: equals
+            value: true
+            description: 소상공인기본법상 소상공인이어야 합니다.
+    sources:
+      - &semas_source
+        data_source_key: semas-policy-funds-2026
+        external_id: mss-2026-448
+        title: 2026년 중소벤처기업부 소상공인 정책자금 융자사업 3차 변경 공고
+        official_url: *semas_url
+        published_at: 2026-07-10T00:00:00+09:00
+        checked_at: *checked
+  - slug: semas-2026-emergency-management-stability
+    name: 2026 긴급경영안정자금
+    product_type: policy_fund
+    status: active
+    summary: 재해 피해 또는 일시적 경영애로를 겪는 소상공인을 지원하는 정책자금입니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      category: 특별경영안정자금
+      eligibility_notes: 재해 피해 또는 공고상 일시적 경영애로 요건을 확인해야 합니다.
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups: [*common_group]
+    sources: [*semas_source]
+  - slug: semas-2026-credit-vulnerable
+    name: 2026 신용취약자금
+    product_type: policy_fund
+    status: active
+    summary: 중·저신용 소상공인을 위한 전용 정책자금입니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      category: 특별경영안정자금
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups:
+      - name: 중·저신용 소상공인
+        rules:
+          - field_key: region_code
+            operator: in
+            value: [KR]
+            description: 전국 대상 정책자금입니다.
+          - field_key: is_small_business
+            operator: equals
+            value: true
+            description: 소상공인이어야 합니다.
+          - field_key: credit_score_nice
+            operator: less_than_or_equal
+            value: 839
+            description: 공고상 NCB 839점 이하 중·저신용 소상공인 대상입니다.
+    sources: [*semas_source]
+  - slug: semas-2026-refinance
+    name: 2026 대환대출
+    product_type: policy_fund
+    status: active
+    summary: 금융권의 고금리 대출 등을 정책자금으로 전환해 이자부담을 낮추는 자금입니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      funding_purposes: [refinance]
+      category: 특별경영안정자금
+      eligibility_notes: 기존 대출의 금리·만기연장 제한 등 세부 대환요건을 확인해야 합니다.
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups:
+      - name: 대환대출 공개 신용조건
+        rules:
+          - field_key: region_code
+            operator: in
+            value: [KR]
+            description: 전국 대상 정책자금입니다.
+          - field_key: is_small_business
+            operator: equals
+            value: true
+            description: 소상공인이어야 합니다.
+          - field_key: credit_score_nice
+            operator: less_than_or_equal
+            value: 919
+            description: 공고상 NCB 919점 이하 중·저신용 소상공인 대상입니다.
+    sources: [*semas_source]
+  - slug: semas-2026-restart-special
+    name: 2026 재도전특별자금
+    product_type: policy_fund
+    status: active
+    summary: 재창업 또는 채무조정 성실상환 소상공인의 재도전을 지원하는 자금입니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      category: 특별경영안정자금
+      eligibility_notes: 재창업·채무조정 성실상환 등 세부 유형을 확인해야 합니다.
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups: [*common_group]
+    sources: [*semas_source]
+  - slug: semas-2026-disabled-business
+    name: 2026 장애인기업지원자금
+    product_type: policy_fund
+    status: active
+    summary: 장애인기업의 경영안정을 지원하는 전용 정책자금입니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      category: 특별경영안정자금
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups:
+      - name: 장애인기업
+        rules:
+          - field_key: is_small_business
+            operator: equals
+            value: true
+            description: 소상공인이어야 합니다.
+          - field_key: vulnerability_category
+            operator: contains
+            value: disabled_business
+            description: 장애인기업 확인요건을 충족해야 합니다.
+    sources: [*semas_source]
+  - slug: semas-2026-youth-employment-linked
+    name: 2026 청년고용연계자금
+    product_type: policy_fund
+    status: active
+    summary: 청년 대표 또는 청년 고용 소상공인을 지원하는 정책자금입니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      category: 특별경영안정자금
+      eligibility_notes: 대표자 연령 또는 청년 고용요건을 공고문에서 확인해야 합니다.
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups: [*common_group]
+    sources: [*semas_source]
+  - slug: semas-2026-small-manufacturer-special
+    name: 2026 소공인특화자금
+    product_type: policy_fund
+    status: active
+    summary: 제조업을 영위하는 소공인을 위한 성장기반 정책자금입니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      funding_purposes: [working_capital, facilities]
+      category: 성장기반자금
+      eligibility_notes: 소공인 및 제조업 해당 여부를 공식 업종기준으로 확인해야 합니다.
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups: [*common_group]
+    sources: [*semas_source]
+  - slug: semas-2026-innovation-growth
+    name: 2026 혁신성장촉진자금
+    product_type: policy_fund
+    status: active
+    summary: 수출·매출신장·스마트기술 도입 등 성장 가능성이 높은 소상공인을 지원합니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      funding_purposes: [working_capital, facilities]
+      category: 성장기반자금
+      eligibility_notes: 혁신형 또는 일반형 세부요건을 확인해야 합니다.
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups: [*common_group]
+    sources: [*semas_source]
+  - slug: semas-2026-private-investment-matching
+    name: 2026 민간투자연계형 매칭융자
+    product_type: policy_fund
+    status: active
+    summary: 민간 투자자에게 투자·펀딩을 받은 소상공인의 성장을 지원하는 매칭융자입니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      funding_purposes: [working_capital, facilities]
+      category: 성장기반자금
+      eligibility_notes: 지정 운영기관의 선투자·추천 등 세부요건을 확인해야 합니다.
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups: [*common_group]
+    sources: [*semas_source]
+  - slug: semas-2026-mutual-growth
+    name: 2026 상생성장지원자금
+    product_type: policy_fund
+    status: active
+    summary: 온라인 플랫폼의 선별·육성과 연계해 온라인 진출 소상공인의 성장을 지원합니다.
+    application_url: *semas_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *semas_extra
+      category: 성장기반자금
+      eligibility_notes: 협약 플랫폼 입점·선정 여부 등 세부요건을 확인해야 합니다.
+    organization_roles: *semas_roles
+    benefits: [*policy_loan]
+    eligibility_groups:
+      - name: 온라인 진출 소상공인
+        rules:
+          - field_key: is_small_business
+            operator: equals
+            value: true
+            description: 소상공인이어야 합니다.
+          - field_key: online_seller
+            operator: equals
+            value: true
+            description: 온라인 플랫폼 연계 대상이어야 합니다.
+    sources: [*semas_source]

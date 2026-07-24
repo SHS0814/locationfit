@@ -20,6 +20,8 @@ class Settings:
     app_name: str = os.getenv("APP_NAME", "KB 상권추천 API")
     app_env: str = os.getenv("APP_ENV", "development")
     api_prefix: str = "/api/v1"
+    database_url: str | None = os.getenv("DATABASE_URL") or None
+    bizinfo_api_key: str = os.getenv("BIZINFO_API_KEY", "")
     artifact_dir: Path = Path(
         os.getenv("ARTIFACT_DIR", str(PROJECT_ROOT / "backend/artifacts/current"))
     ).resolve()

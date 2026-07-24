@@ -1,0 +1,20 @@
+catalog_version: 1
+source_aliases:
+  - data_source_key: bizinfo-api
+    external_id: PBLN_000000000124238
+    product_slugs:
+      - semas-2026-general-management-stability
+      - semas-2026-emergency-management-stability
+      - semas-2026-credit-vulnerable
+      - semas-2026-refinance
+      - semas-2026-restart-special
+      - semas-2026-disabled-business
+      - semas-2026-youth-employment-linked
+      - semas-2026-small-manufacturer-special
+      - semas-2026-innovation-growth
+      - semas-2026-private-investment-matching
+      - semas-2026-mutual-growth
+  - data_source_key: bizinfo-api
+    external_id: PBLN_000000000119801
+    product_slugs:
+      - koreg-2026-biz-plus-card

@@ -1,0 +1,65 @@
+catalog_version: 1
+organizations:
+  - code: kb-bank
+    name: KB국민은행
+    organization_type: bank
+    homepage_url: https://www.kbstar.com/
+  - code: mss
+    name: 중소벤처기업부
+    organization_type: public_agency
+    homepage_url: https://www.mss.go.kr/
+  - code: semas
+    name: 소상공인시장진흥공단
+    organization_type: public_agency
+    homepage_url: https://www.semas.or.kr/
+  - code: seoul
+    name: 서울특별시
+    organization_type: local_government
+    homepage_url: https://www.seoul.go.kr/
+  - code: seoul-credit
+    name: 서울신용보증재단
+    organization_type: guarantee_foundation
+    homepage_url: https://www.seoulshinbo.co.kr/
+  - code: regional-credit-foundations
+    name: 지역신용보증재단
+    organization_type: guarantee_foundation
+    homepage_url: https://www.koreg.or.kr/
+  - code: koreg
+    name: 신용보증재단중앙회
+    organization_type: guarantee_foundation
+    homepage_url: https://www.koreg.or.kr/
+  - code: bizinfo
+    name: 기업마당
+    organization_type: aggregator
+    homepage_url: https://www.bizinfo.go.kr/
+data_sources:
+  - key: kb-business-loans
+    name: KB국민은행 개인사업자대출 공식 목록
+    acquisition_mode: curated_official_source
+    organization_code: kb-bank
+    base_url: https://obank.kbstar.com/quics?page=C110260
+  - key: semas-policy-funds-2026
+    name: 2026년 소상공인 정책자금 융자사업 3차 변경 공고
+    acquisition_mode: curated_official_source
+    organization_code: mss
+    base_url: https://www.mss.go.kr/site/smba/ex/bbs/View.do?bcIdx=1069735&cbIdx=310
+  - key: seoul-sme-funds-2026
+    name: 2026년 서울시 중소기업육성자금
+    acquisition_mode: curated_official_source
+    organization_code: seoul
+    base_url: https://news.seoul.go.kr/economy/rearing-funds
+  - key: seoul-credit-products
+    name: 서울신용보증재단 공식 상품 안내
+    acquisition_mode: curated_official_source
+    organization_code: seoul-credit
+    base_url: https://www.seoulshinbo.co.kr/
+  - key: koreg-products
+    name: 신용보증재단중앙회 보증상품 찾기
+    acquisition_mode: curated_official_source
+    organization_code: koreg
+    base_url: https://www.koreg.or.kr/
+  - key: bizinfo-api
+    name: 기업마당 지원사업정보 API
+    acquisition_mode: official_api
+    organization_code: bizinfo
+    base_url: https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do

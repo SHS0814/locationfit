@@ -1,0 +1,62 @@
+catalog_version: 1
+products:
+  - slug: koreg-2026-biz-plus-card
+    name: 2026 소상공인 비즈플러스카드 지원사업
+    product_type: guarantee
+    status: active
+    summary: 개인사업자 소상공인의 단기 운영자금 이용을 지원하는 보증 연계 카드 사업입니다.
+    application_url: https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000119801
+    last_checked_at: 2026-07-24T00:00:00+09:00
+    extra_data:
+      funding_purposes: [working_capital]
+      repayment_methods: [credit_card]
+      closing_condition: 예산 소진시까지
+      category: 전국 특례보증
+      eligibility_notes: 매출액 기준과 보증제한 사유는 시행 공고문을 추가 확인해야 합니다.
+      curation_level: official_announcement
+    organization_roles:
+      - organization_code: mss
+        role: authority
+      - organization_code: koreg
+        role: operator
+      - organization_code: regional-credit-foundations
+        role: guarantor
+    benefits:
+      - benefit_type: guarantee
+        amount_max_krw: 10000000
+        term_max_months: 12
+        original_text: 카드한도 최대 1천만원, 최초 사용기간 1년이며 연장 조건은 공고문을 확인해야 합니다.
+      - benefit_type: other
+        original_text: 연회비 면제, 최대 6개월 무이자 할부와 공고상 캐시백 혜택을 제공합니다.
+    eligibility_groups:
+      - name: 공개 기본조건
+        description: 기업마당 공식 공고에 명시된 기본조건입니다.
+        rules:
+          - field_key: region_code
+            operator: in
+            value: [KR]
+            description: 전국 지역신용보증재단을 통해 제공되는 사업입니다.
+          - field_key: business_entity_type
+            operator: equals
+            value: individual
+            description: 개인사업자 대상입니다.
+          - field_key: is_small_business
+            operator: equals
+            value: true
+            description: 소상공인이어야 합니다.
+          - field_key: business_age_months
+            operator: greater_than_or_equal
+            value: 6
+            unit: month
+            description: 업력 6개월 이상이어야 합니다.
+          - field_key: credit_score_nice
+            operator: between
+            value: [595, 964]
+            description: 공고상 NCB 595점 이상 964점 이하 조건입니다.
+    sources:
+      - data_source_key: bizinfo-api
+        external_id: PBLN_000000000119801
+        title: 2026년 소상공인(개인사업자) 비즈플러스카드 지원사업 시행 공고
+        official_url: https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000119801
+        published_at: 2026-03-23T00:00:00+09:00
+        checked_at: 2026-07-24T00:00:00+09:00

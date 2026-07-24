@@ -1,0 +1,150 @@
+catalog_version: 1
+products:
+  - slug: kb-owner-plus-credit-line
+    name: KB사장님+ 마이너스통장
+    product_type: bank_loan
+    status: active
+    summary: 필요한 만큼 사용하고 상환할 수 있는 개인사업자 한도대출입니다.
+    application_url: https://obank.kbstar.com/quics?page=C110260
+    last_checked_at: &checked 2026-07-24T00:00:00+09:00
+    extra_data:
+      funding_purposes: [working_capital]
+      rate_basis: institution_review
+      repayment_methods: [credit_line]
+      application_channels: [스타뱅킹, 스타기업뱅킹, 스마트기업대출]
+      curation_level: official_list
+    organization_roles: &kb_roles
+      - organization_code: kb-bank
+        role: lender
+    benefits:
+      - benefit_type: loan
+        amount_max_krw: 100000000
+        original_text: 공식 목록 표시 한도 최고 1억원
+    sources:
+      - &kb_source
+        data_source_key: kb-business-loans
+        external_id: kb-owner-plus-credit-line
+        title: KB국민은행 개인사업자대출 상품목록 5건
+        official_url: https://obank.kbstar.com/quics?page=C110260
+        checked_at: *checked
+  - slug: kb-small-business-credit-loan
+    name: KB소상공인 신용대출
+    product_type: bank_loan
+    status: active
+    summary: 영업점 방문 없이 신청 가능한 개인사업자 신용대출입니다.
+    application_url: https://obank.kbstar.com/quics?page=C110260
+    last_checked_at: *checked
+    extra_data:
+      funding_purposes: [working_capital]
+      rate_basis: institution_review
+      application_channels: [스타뱅킹, 스타기업뱅킹, 기업인터넷뱅킹, 스마트기업대출]
+      curation_level: official_list
+    organization_roles: *kb_roles
+    benefits:
+      - benefit_type: loan
+        amount_max_krw: 100000000
+        original_text: 공식 목록 표시 한도 최고 1억원
+    eligibility_groups:
+      - name: 공식 목록 기본대상
+        rules:
+          - field_key: is_small_business
+            operator: equals
+            value: true
+            description: 소상공인 대상 상품입니다.
+    sources:
+      - <<: *kb_source
+        external_id: kb-small-business-credit-loan
+  - slug: kb-small-business-guarantee-regional
+    name: KB소상공인 보증서대출(지역재단)
+    product_type: bank_loan
+    status: active
+    summary: 지역신용보증재단 보증서를 비대면으로 연계하는 개인사업자 대출입니다.
+    application_url: https://obank.kbstar.com/quics?page=C110260
+    last_checked_at: *checked
+    extra_data:
+      funding_purposes: [working_capital]
+      rate_basis: variable
+      application_channels: [스타뱅킹, 스타기업뱅킹, 스마트기업대출]
+      curation_level: official_list
+    organization_roles:
+      - organization_code: kb-bank
+        role: lender
+      - organization_code: regional-credit-foundations
+        role: guarantor
+    benefits:
+      - benefit_type: loan
+        amount_max_krw: 100000000
+        original_text: 공식 목록 표시 한도 최고 1억원이며 보증서 발급금액 이내입니다.
+      - benefit_type: guarantee
+        original_text: 지역신용보증재단 보증서 발급이 필요합니다.
+    eligibility_groups:
+      - name: 보증서대출 기본대상
+        rules:
+          - field_key: business_entity_type
+            operator: equals
+            value: individual
+            description: 개인사업자 대상 상품입니다.
+    sources:
+      - <<: *kb_source
+        external_id: kb-small-business-guarantee-regional
+  - slug: kb-small-business-guarantee-ontact
+    name: KB소상공인 보증서대출(온택트)
+    product_type: bank_loan
+    status: active
+    summary: 최근 3개월 매출이 확인되는 소상공인을 위한 비대면 보증서대출입니다.
+    application_url: https://obank.kbstar.com/quics?page=C110260
+    last_checked_at: *checked
+    extra_data:
+      funding_purposes: [working_capital]
+      rate_basis: institution_review
+      application_channels: [스타뱅킹, 스타기업뱅킹, 스마트기업대출]
+      curation_level: official_list
+    organization_roles:
+      - organization_code: kb-bank
+        role: lender
+      - organization_code: regional-credit-foundations
+        role: guarantor
+    benefits:
+      - benefit_type: loan
+        amount_max_krw: 30000000
+        original_text: 공식 목록 표시 한도 최고 3천만원
+      - benefit_type: guarantee
+        original_text: 지역신용보증재단 온택트 보증을 연계합니다.
+    eligibility_groups:
+      - name: 온택트 공개 기본조건
+        rules:
+          - field_key: recent_sales_months
+            operator: greater_than_or_equal
+            value: 3
+            unit: month
+            description: 공식 목록에 최근 3개월 매출 조건이 표시되어 있습니다.
+    sources:
+      - <<: *kb_source
+        external_id: kb-small-business-guarantee-ontact
+  - slug: kb-seller-loan
+    name: KB셀러론
+    product_type: bank_loan
+    status: active
+    summary: 온라인 판매자의 정산 흐름을 기반으로 제공되는 대출입니다.
+    application_url: https://obank.kbstar.com/quics?page=C110260
+    last_checked_at: *checked
+    extra_data:
+      funding_purposes: [working_capital]
+      rate_basis: institution_review
+      application_channels: [스타뱅킹, 스타기업뱅킹, 기업인터넷뱅킹, 스마트기업대출]
+      curation_level: official_list
+    organization_roles: *kb_roles
+    benefits:
+      - benefit_type: loan
+        amount_max_krw: 500000000
+        original_text: 공식 목록 표시 한도 최고 5억원
+    eligibility_groups:
+      - name: 온라인 판매자
+        rules:
+          - field_key: online_seller
+            operator: equals
+            value: true
+            description: 온라인 판매자 대상 상품입니다.
+    sources:
+      - <<: *kb_source
+        external_id: kb-seller-loan
