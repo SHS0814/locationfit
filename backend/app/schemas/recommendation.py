@@ -61,6 +61,33 @@ class AreaBoundary(BaseModel):
     coordinates: list[Any]
 
 
+class MarketGeographyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    group_by: Literal["area", "district"]
+    entity_keys: list[str] = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_entity_keys(self) -> "MarketGeographyRequest":
+        if any(not key.strip() for key in self.entity_keys):
+            raise ValueError("지도 대상 키는 비어 있을 수 없습니다.")
+        if len(set(self.entity_keys)) != len(self.entity_keys):
+            raise ValueError("지도 대상 키는 중복될 수 없습니다.")
+        return self
+
+
+class MarketGeographyFeature(BaseModel):
+    entity_key: str
+    entity_name: str
+    boundary: AreaBoundary
+
+
+class MarketGeographyResponse(BaseModel):
+    request_id: str
+    group_by: Literal["area", "district"]
+    features: list[MarketGeographyFeature]
+
+
 class RecommendationItem(BaseModel):
     rank: int
     area_code: str

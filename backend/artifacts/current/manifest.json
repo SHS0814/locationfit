@@ -1,7 +1,7 @@
 {
-  "artifact_version": "2025q4-v2",
-  "schema_version": 3,
-  "created_at": "2026-07-20T12:14:02.117554+00:00",
+  "artifact_version": "2025q4-v3",
+  "schema_version": 4,
+  "created_at": "2026-07-24T05:32:16+00:00",
   "coordinate_reference": {
     "source": "EPSG:5181",
     "target": "EPSG:4326"
@@ -9,6 +9,12 @@
   "area_boundary_source": {
     "name": "서울시 상권분석서비스(영역-상권)",
     "dataset_id": "OA-15560"
+  },
+  "district_boundary_source": {
+    "name": "국가데이터처 행정구역 시군구 정보(JUSO)",
+    "source_snapshot": "2015",
+    "conversion": "southkorea/seoul-maps",
+    "topology_repair": "shapely.make_valid"
   },
   "data_period": {
     "performance": "2021Q1~2025Q4",
@@ -27,6 +33,10 @@
     "area_boundaries.parquet": {
       "rows": 1650,
       "sha256": "76050f6d6e33bb0f940fc66c785ac4a2b3941d7ac17120e5dc73906059154fb4"
+    },
+    "district_boundaries.parquet": {
+      "rows": 25,
+      "sha256": "2a88ce0f14c37fbf1eea9a7b9ba97cca865ac6974475b8ecdc6a0a22e05983c2"
     },
     "commercial_rent_observations.parquet": {
       "rows": 14791,

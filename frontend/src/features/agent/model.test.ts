@@ -84,6 +84,23 @@ describe('agent session model', () => {
     expect(restored.leaseCandidates).toHaveLength(1)
     expect(restored.leaseFinanceById['listing-1'].eligibility.own_capital_krw).toBe(10_000_000)
     expect(restored.selectedLeaseCandidateId).toBe('listing-1')
+    expect(restored.workspaceChats.stores[0].content).toContain('선택한 상권')
+  })
+
+  it('restores independent page agent conversations', () => {
+    const restored = restoreSession(JSON.stringify({
+      schemaVersion: 8,
+      history: [{ role: 'assistant', content: '기존 상담' }],
+      draft: emptyDraft,
+      phase: 'results',
+      workspaceChats: {
+        stores: [{ role: 'user', content: '점포 질문' }],
+        finance: [{ role: 'user', content: '자금 질문' }],
+      },
+    }))
+
+    expect(restored.workspaceChats.stores[0].content).toBe('점포 질문')
+    expect(restored.workspaceChats.finance[0].content).toBe('자금 질문')
   })
 
   it('keeps an industry-only draft ready after strategy selection', () => {

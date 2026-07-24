@@ -230,8 +230,8 @@ def main() -> None:
 
     manifest_path = args.artifact_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["artifact_version"] = "2025q4-v2"
-    manifest["schema_version"] = 3
+    manifest["artifact_version"] = "2025q4-v3"
+    manifest["schema_version"] = 4
     manifest["created_at"] = datetime.now(timezone.utc).isoformat()
     manifest.setdefault("files", {}).pop("commercial_rent_crosswalk.parquet", None)
     manifest["files"][observation_path.name] = {

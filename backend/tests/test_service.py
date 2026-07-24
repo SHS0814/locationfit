@@ -14,6 +14,15 @@ def test_metadata_and_recommendation_with_real_artifacts() -> None:
     metadata = service.metadata()
     assert len(metadata["industries"]) == 63
     assert "강남구" in metadata["districts"]
+    assert len(service.district_boundaries) == 25
+    assert set(service.district_boundaries) == set(metadata["districts"])
+
+    geography = service.market_geographies(
+        group_by="district",
+        entity_keys=["강남구", "마포구"],
+    )
+    assert [item["entity_key"] for item in geography] == ["강남구", "마포구"]
+    assert all(item["boundary"]["type"] in {"Polygon", "MultiPolygon"} for item in geography)
 
     request = RecommendationRequestSchema(
         industry_code="CS100001",
@@ -82,7 +91,7 @@ def test_recommendation_evidence_context_exposes_sources_methodology_and_limits(
     _, diagnostics, _ = service.recommend_with_report(request)
     context = service.recommendation_evidence_context(request, diagnostics)
 
-    assert context["artifact_version"] == "2025q4-v2"
+    assert context["artifact_version"] == "2025q4-v3"
     assert context["data_period"]["performance"] == "2021Q1~2025Q4"
     assert {source["dataset_id"] for source in context["sources"]} >= {
         "OA-15572", "OA-15577", "OA-15568",

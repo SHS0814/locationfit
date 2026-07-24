@@ -6,6 +6,7 @@ from backend.app.services.store_service import CommercialStoreService
 from backend.app.services.web_research_service import WebResearchService
 from backend.app.services.finance_service import FinancePlanService
 from backend.app.services.listing_service import LeaseCandidateService
+from backend.app.services.workspace_agent_service import WorkspaceAgentService
 
 
 def get_recommender(request: Request) -> RecommenderService:
@@ -20,6 +21,14 @@ def get_location_agent(request: Request) -> LocationAgentService:
     service = getattr(request.app.state, "location_agent", None)
     if service is None:
         detail = getattr(request.app.state, "startup_error", "AI 상담 서비스가 준비되지 않았습니다.")
+        raise RuntimeError(detail)
+    return service
+
+
+def get_workspace_agent(request: Request) -> WorkspaceAgentService:
+    service = getattr(request.app.state, "workspace_agent", None)
+    if service is None:
+        detail = getattr(request.app.state, "startup_error", "페이지 전용 AI 서비스가 준비되지 않았습니다.")
         raise RuntimeError(detail)
     return service
 

@@ -135,6 +135,23 @@ class AgentTurnRequest(BaseModel):
         return self
 
 
+class WorkspaceAgentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workspace: Literal["stores", "finance"]
+    message: str = Field(min_length=1, max_length=2_000)
+    history: list[AgentMessage] = Field(default_factory=list, max_length=20)
+    context: dict[str, object] = Field(default_factory=dict)
+
+
+class WorkspaceAgentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    workspace: Literal["stores", "finance"]
+    assistant_message: str
+
+
 class StrategyScenario(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

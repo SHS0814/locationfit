@@ -83,6 +83,7 @@ class RecommenderService:
         self.index = bundle.recommendation_index
         self.evidence = bundle.evidence
         self.boundaries = bundle.boundaries
+        self.district_boundaries = bundle.district_boundaries
         self.engine = AreaRecommender(self.index, self.evidence)
         self.cost_provider = cost_provider or UnavailableCostProvider()
         self.market_lookup = MarketLookupService(
@@ -93,6 +94,9 @@ class RecommenderService:
         self.location_lookup = self.index.set_index("area_code")[
             ["latitude", "longitude", "admin_dong_name", "area_size_sqm"]
         ].to_dict(orient="index")
+        self.area_name_lookup = self.index.set_index(self.index["area_code"].astype(str))[
+            "area_name"
+        ].astype(str).to_dict()
 
     @property
     def artifact_version(self) -> str:
@@ -125,6 +129,38 @@ class RecommenderService:
             "time_bands": TIME_OPTIONS,
             "rent_floors": self.cost_provider.options(),
         }
+
+    def market_geographies(
+        self,
+        *,
+        group_by: str,
+        entity_keys: list[str],
+    ) -> list[dict[str, Any]]:
+        if group_by == "area":
+            unknown = [key for key in entity_keys if key not in self.boundaries]
+            if unknown:
+                raise ValueError(f"지원하지 않는 상권 코드입니다: {', '.join(unknown)}")
+            return [
+                {
+                    "entity_key": key,
+                    "entity_name": self.area_name_lookup[key],
+                    "boundary": self.boundaries[key],
+                }
+                for key in entity_keys
+            ]
+        if group_by == "district":
+            unknown = [key for key in entity_keys if key not in self.district_boundaries]
+            if unknown:
+                raise ValueError(f"지원하지 않는 자치구입니다: {', '.join(unknown)}")
+            return [
+                {
+                    "entity_key": key,
+                    "entity_name": key,
+                    "boundary": self.district_boundaries[key]["geometry"],
+                }
+                for key in entity_keys
+            ]
+        raise ValueError(f"지도에서 지원하지 않는 조회 단위입니다: {group_by}")
 
     def recommendation_evidence_context(
         self,

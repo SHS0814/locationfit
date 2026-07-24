@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { MarketLookupResult } from '../../types/api'
+import { isMappableLookup, marketLookupEntityKey } from './marketLookupMapModel'
 
 interface Props {
   result: MarketLookupResult
@@ -7,9 +8,19 @@ interface Props {
   total: number
   onPrevious: () => void
   onNext: () => void
+  selectedKey: string | null
+  onSelect: (key: string) => void
 }
 
-export function MarketLookupCard({ result, position, total, onPrevious, onNext }: Props) {
+export function MarketLookupCard({
+  result,
+  position,
+  total,
+  onPrevious,
+  onNext,
+  selectedKey,
+  onSelect,
+}: Props) {
   const [open, setOpen] = useState(true)
 
   useEffect(() => setOpen(true), [result])
@@ -37,23 +48,37 @@ export function MarketLookupCard({ result, position, total, onPrevious, onNext }
           <div><dt>표준편차</dt><dd>{result.distribution.standard_deviation_display}</dd></div>
         </dl>
         <p className="lookup-population">필터 적용 후 전체 {result.distribution.population_count.toLocaleString('ko-KR')}개 대상 기준</p>
-        <ol>
-          {result.rows.map((row) => (
-            <li key={`${row.rank}-${row.entity_code || row.entity_name}-${row.district_name || ''}`}>
-              <b>{row.rank}</b>
-              <span>
-                <strong>{row.entity_name}</strong>
-                <small>{[
-                  row.district_name,
-                  row.admin_dong_name,
-                  row.area_count > 1 ? `관측 상권 ${row.area_count}곳` : null,
-                ].filter(Boolean).join(' · ')}</small>
-                <small>평균 대비 {row.difference_from_mean_display} · 중앙값 대비 {row.difference_from_median_display} · {formatSigma(row.standard_deviation_distance)}</small>
-              </span>
-              <em>{row.metric_display_value}</em>
-            </li>
-          ))}
-        </ol>
+        <div className="lookup-content">
+          <ol>
+            {result.rows.map((row) => {
+              const entityKey = marketLookupEntityKey(result, row)
+              const selectable = entityKey !== null && isMappableLookup(result)
+              return (
+                <li key={`${row.rank}-${row.entity_code || row.entity_name}-${row.district_name || ''}`}>
+                  <button
+                    type="button"
+                    className={selectable && entityKey === selectedKey ? 'selected' : ''}
+                    disabled={!selectable}
+                    onClick={() => entityKey && onSelect(entityKey)}
+                    aria-pressed={selectable ? entityKey === selectedKey : undefined}
+                  >
+                    <b>{row.rank}</b>
+                    <span>
+                      <strong>{row.entity_name}</strong>
+                      <small>{[
+                        row.district_name,
+                        row.admin_dong_name,
+                        row.area_count > 1 ? `관측 상권 ${row.area_count}곳` : null,
+                      ].filter(Boolean).join(' · ')}</small>
+                      <small>평균 대비 {row.difference_from_mean_display} · 중앙값 대비 {row.difference_from_median_display} · {formatSigma(row.standard_deviation_distance)}</small>
+                    </span>
+                    <em>{row.metric_display_value}</em>
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
+        </div>
         <small>{result.disclosure}</small>
       </section>
     </details>

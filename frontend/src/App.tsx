@@ -5,6 +5,10 @@ import { AgentPanel } from './features/agent/AgentPanel'
 import { AgentAnalysisPanels } from './features/agent/AgentAnalysisPanels'
 import { AgentCommandCenter } from './features/agent/AgentCommandCenter'
 import { MarketLookupCard } from './features/agent/MarketLookupCard'
+import { MarketLookupMap } from './features/agent/MarketLookupMap'
+import { isMappableLookup, marketLookupEntityKey } from './features/agent/marketLookupMapModel'
+import { OutputPager, type OutputPage } from './features/agent/OutputPager'
+import { WorkspaceAgentPanel } from './features/agent/WorkspaceAgentPanel'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
@@ -16,6 +20,7 @@ import {
   AGENT_V3_SESSION_KEY,
   createDemoLeaseCandidate,
   createDemoLeaseFinanceState,
+  createInitialWorkspaceChats,
   draftToRequest,
   createHongdaeCafeDemoSession,
   initialSession,
@@ -33,7 +38,22 @@ import { AreaStoreExplorer } from './features/stores/AreaStoreExplorer'
 import { LeaseCandidateEditor } from './features/finance/LeaseCandidateEditor'
 import { LeaseCandidateWorkspace } from './features/finance/LeaseCandidateWorkspace'
 import { emptyFinanceState, hasDuplicateSourceUrl, type LeaseCandidateFinanceState, type LeaseCandidateRecord } from './features/finance/model'
-import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption, StoreRelation } from './types/api'
+import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption, StoreRelation, WorkspaceAgentScope } from './types/api'
+
+type RecommendationPage = 'analysis' | WorkspaceAgentScope
+
+const recommendationPageOrder: RecommendationPage[] = ['analysis', 'stores', 'finance']
+const recommendationPageLabels: Record<RecommendationPage, string> = {
+  analysis: '상권분석',
+  stores: '상권내 점포분석',
+  finance: '자금계획',
+}
+
+function compactRecommendation(item: RecommendationItem): Record<string, unknown> {
+  const compact = { ...item } as Record<string, unknown>
+  delete compact.boundary
+  return compact
+}
 
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
@@ -48,6 +68,20 @@ export default function App() {
       || sessionStorage.getItem(AGENT_LEGACY_SESSION_KEY),
   ))
   const [selected, setSelected] = useState<RecommendationItem | null>(() => session.items[0] || null)
+  const [lookupSelectedKey, setLookupSelectedKey] = useState<string | null>(() => {
+    const lookup = session.marketLookup
+    return lookup?.rows.length ? marketLookupEntityKey(lookup, lookup.rows[0]) : null
+  })
+  const [outputPage, setOutputPage] = useState<OutputPage>(() => {
+    if (session.items.length > 0 || session.storeAreaCode || session.financeAreaCode) return 'recommendation'
+    if (session.marketLookup) return 'lookup'
+    return 'strategy'
+  })
+  const [recommendationPage, setRecommendationPage] = useState<RecommendationPage>(() => {
+    if (session.financeAreaCode) return 'finance'
+    if (session.storeAreaCode) return 'stores'
+    return 'analysis'
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastTurn, setLastTurn] = useState<AgentTurnRequest | null>(null)
@@ -56,6 +90,8 @@ export default function App() {
   const [researchLoadingKey, setResearchLoadingKey] = useState<string | null>(null)
   const [leaseEditorAreaCode, setLeaseEditorAreaCode] = useState<string | null>(null)
   const [editingLeaseCandidateId, setEditingLeaseCandidateId] = useState<string | null>(null)
+  const [workspaceLoading, setWorkspaceLoading] = useState<WorkspaceAgentScope | null>(null)
+  const [workspaceError, setWorkspaceError] = useState<Record<WorkspaceAgentScope, string | null>>({ stores: null, finance: null })
   const demoStarted = useRef(false)
   const recommendationItemsReady = session.items.length > 0 && session.items.every(hasAreaBoundary)
 
@@ -84,8 +120,10 @@ export default function App() {
         if (!response.recommendations.every(hasAreaBoundary)) {
           throw new Error('상권 경계 데이터를 받지 못했습니다. API 서버를 재시작해주세요.')
         }
-        setSession((current) => ({ ...current, items: response.recommendations }))
+        setSession((current) => ({ ...current, items: response.recommendations, workspaceChats: createInitialWorkspaceChats() }))
         setSelected(response.recommendations[0] || null)
+        setOutputPage('recommendation')
+        setRecommendationPage('analysis')
       })
       .catch((reason: Error) => {
         if (!cancelled) setError(reason.message)
@@ -145,9 +183,13 @@ export default function App() {
         marketLookup: response.market_lookup || session.marketLookup,
         marketLookupHistory,
         marketLookupIndex: response.market_lookup ? marketLookupHistory.length - 1 : session.marketLookupIndex,
-        storeAreaCode: preserveAnalysis && !response.recommendations.length ? session.storeAreaCode : null,
+        storeAreaCode: isMarketLookup
+          ? null
+          : preserveAnalysis && !response.recommendations.length ? session.storeAreaCode : null,
         storeAnalysis: preserveAnalysis && !response.recommendations.length ? session.storeAnalysis : null,
-        selectedStoreId: preserveAnalysis && !response.recommendations.length ? session.selectedStoreId : null,
+        selectedStoreId: isMarketLookup
+          ? null
+          : preserveAnalysis && !response.recommendations.length ? session.selectedStoreId : null,
         storeRelations: preserveAnalysis && !response.recommendations.length
           ? session.storeRelations
           : ['competitor', 'complementary', 'daily_life', 'other'],
@@ -156,11 +198,32 @@ export default function App() {
         leaseCandidates: preserveAnalysis && !response.recommendations.length ? session.leaseCandidates : [],
         leaseFinanceById: preserveAnalysis && !response.recommendations.length ? session.leaseFinanceById : {},
         selectedLeaseCandidateId: preserveAnalysis && !response.recommendations.length ? session.selectedLeaseCandidateId : null,
-        financeAreaCode: preserveAnalysis && !response.recommendations.length ? session.financeAreaCode : null,
+        financeAreaCode: isMarketLookup
+          ? null
+          : preserveAnalysis && !response.recommendations.length ? session.financeAreaCode : null,
+        workspaceChats: response.recommendations.length ? createInitialWorkspaceChats() : session.workspaceChats,
       }
       setSession(nextSession)
-      if (response.recommendations.length) setSelected(response.recommendations[0] || null)
-      else if (!preserveAnalysis) setSelected(null)
+      if (response.recommendations.length) {
+        setSelected(response.recommendations[0] || null)
+        setOutputPage('recommendation')
+        setRecommendationPage('analysis')
+      } else if (response.market_lookup) {
+        setLookupSelectedKey(
+          response.market_lookup.rows.length
+            ? marketLookupEntityKey(response.market_lookup, response.market_lookup.rows[0])
+            : null,
+        )
+        setOutputPage('lookup')
+      } else if (!preserveAnalysis) {
+        setSelected(null)
+        setOutputPage('strategy')
+      } else if (response.phase === 'results') {
+        setOutputPage('recommendation')
+        setRecommendationPage('analysis')
+      } else {
+        setOutputPage('strategy')
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'AI 상담 요청에 실패했습니다.')
     } finally {
@@ -172,6 +235,8 @@ export default function App() {
     const baseSession = createHongdaeCafeDemoSession()
     setSession(baseSession)
     setSelected(null)
+    setOutputPage('strategy')
+    setRecommendationPage('analysis')
     setLoading(true)
     setError(null)
     setLastTurn(null)
@@ -263,6 +328,8 @@ export default function App() {
       }
       setSession(nextSession)
       setSelected(confirmResponse.recommendations[0] || null)
+      setOutputPage('recommendation')
+      setRecommendationPage(demoArea ? 'finance' : 'analysis')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '데모 흐름을 불러오지 못했습니다.')
     } finally {
@@ -329,6 +396,7 @@ export default function App() {
         storeAreaCode: null, storeAnalysis: null, selectedStoreId: null,
         storeRelations: ['competitor', 'complementary', 'daily_life', 'other'], storeSearch: '', webResearch: [],
         leaseCandidates: [], leaseFinanceById: {}, selectedLeaseCandidateId: null, financeAreaCode: null,
+        workspaceChats: createInitialWorkspaceChats(),
       }
     })
   }
@@ -353,6 +421,8 @@ export default function App() {
   const editDraft = (draft: RecommendationDraft) => {
     setError(null)
     setSelected(null)
+    setOutputPage('strategy')
+    setRecommendationPage('analysis')
     setSession((current) => ({
       ...current,
       draft,
@@ -375,6 +445,7 @@ export default function App() {
       leaseFinanceById: {},
       selectedLeaseCandidateId: null,
       financeAreaCode: null,
+      workspaceChats: createInitialWorkspaceChats(),
     }))
   }
 
@@ -393,16 +464,25 @@ export default function App() {
       history: [...initialSession.history],
       draft: { ...initialSession.draft },
       context: { ...initialSession.context },
+      workspaceChats: createInitialWorkspaceChats(),
     })
     setSelected(null)
+    setLookupSelectedKey(null)
+    setOutputPage('strategy')
+    setRecommendationPage('analysis')
     setError(null)
     setLastTurn(null)
     setStoreError(null)
+    setWorkspaceError({ stores: null, finance: null })
     setLeaseEditorAreaCode(null)
     setEditingLeaseCandidateId(null)
   }
 
   const showMarketLookup = (index: number) => {
+    const result = session.marketLookupHistory[index]
+    if (!result) return
+    setLookupSelectedKey(result.rows.length ? marketLookupEntityKey(result, result.rows[0]) : null)
+    setOutputPage('lookup')
     setSession((current) => {
       if (index < 0 || index >= current.marketLookupHistory.length) return current
       return {
@@ -414,8 +494,18 @@ export default function App() {
   }
 
   const openStoreExplorer = async (item: RecommendationItem) => {
+    setOutputPage('recommendation')
+    setRecommendationPage('stores')
     setStoreError(null)
-    setSession((current) => ({ ...current, storeAreaCode: item.area_code, selectedStoreId: null, financeAreaCode: null }))
+    setSession((current) => ({
+      ...current,
+      storeAreaCode: item.area_code,
+      selectedStoreId: null,
+      financeAreaCode: null,
+      workspaceChats: current.storeAreaCode === item.area_code
+        ? current.workspaceChats
+        : { ...current.workspaceChats, stores: createInitialWorkspaceChats().stores },
+    }))
     if (session.storeAnalysis?.area_code === item.area_code && session.storeAnalysis.industry_code === item.industry_code) return
     setStoreLoading(true)
     try {
@@ -471,8 +561,44 @@ export default function App() {
   const editingLeaseCandidate = editingLeaseCandidateId
     ? session.leaseCandidates.find((item) => item.id === editingLeaseCandidateId) || null
     : null
+  const activeMappableLookup = session.marketLookup && isMappableLookup(session.marketLookup)
+    ? session.marketLookup
+    : null
+  const hasStrategyContent = Boolean(
+    session.context.business_description
+    || session.context.target_customer
+    || session.context.operating_pattern
+    || session.assumptions.length
+    || session.scenarios.length
+    || session.tradeoffs.length
+    || session.relaxationOptions.length,
+  )
+  const recommendationTargetArea = selected || session.items[0] || null
+  const recommendationPageIndex = recommendationPageOrder.indexOf(recommendationPage)
+  const previousRecommendationPage = recommendationPageOrder[recommendationPageIndex - 1] || null
+  const nextRecommendationPage = recommendationPageOrder[recommendationPageIndex + 1] || null
+
+  const changeRecommendationPage = (page: RecommendationPage) => {
+    setOutputPage('recommendation')
+    setRecommendationPage(page)
+    if (page !== 'finance' || session.financeAreaCode || !recommendationTargetArea) return
+    setSession((current) => ({
+      ...current,
+      financeAreaCode: recommendationTargetArea.area_code,
+      workspaceChats: { ...current.workspaceChats, finance: createInitialWorkspaceChats().finance },
+    }))
+  }
 
   const openLeaseEditor = (areaCode: string, candidateId: string | null = null) => {
+    setOutputPage('recommendation')
+    setRecommendationPage('finance')
+    setSession((current) => ({
+      ...current,
+      financeAreaCode: areaCode,
+      workspaceChats: current.financeAreaCode === areaCode
+        ? current.workspaceChats
+        : { ...current.workspaceChats, finance: createInitialWorkspaceChats().finance },
+    }))
     setLeaseEditorAreaCode(areaCode)
     setEditingLeaseCandidateId(candidateId)
   }
@@ -525,6 +651,80 @@ export default function App() {
     }))
   }
 
+  const workspaceContext = (workspace: WorkspaceAgentScope): Record<string, unknown> => {
+    if (workspace === 'stores') {
+      const selectedStore = session.storeAnalysis?.stores.find((item) => item.store_id === session.selectedStoreId) || null
+      return {
+        area: activeStoreArea ? compactRecommendation(activeStoreArea) : null,
+        reference_month: session.storeAnalysis?.reference_month || null,
+        summary: session.storeAnalysis?.summary || null,
+        selected_store: selectedStore,
+        active_relations: session.storeRelations,
+        search: session.storeSearch,
+        disclosure: session.storeAnalysis?.disclosure || null,
+        warnings: session.storeAnalysis?.warnings || [],
+      }
+    }
+    const areaCandidates = activeFinanceArea
+      ? session.leaseCandidates.filter((item) => item.areaCode === activeFinanceArea.area_code).slice(0, 10)
+      : []
+    return {
+      area: activeFinanceArea ? compactRecommendation(activeFinanceArea) : null,
+      candidates: areaCandidates,
+      selected_candidate_id: session.selectedLeaseCandidateId,
+      finance_by_candidate: Object.fromEntries(areaCandidates.map((candidate) => [
+        candidate.id,
+        session.leaseFinanceById[candidate.id] || null,
+      ])),
+    }
+  }
+
+  const sendWorkspaceMessage = async (workspace: WorkspaceAgentScope, message: string) => {
+    const history = session.workspaceChats[workspace]
+    setWorkspaceLoading(workspace)
+    setWorkspaceError((current) => ({ ...current, [workspace]: null }))
+    setSession((current) => ({
+      ...current,
+      workspaceChats: {
+        ...current.workspaceChats,
+        [workspace]: [...current.workspaceChats[workspace], { role: 'user' as const, content: message }].slice(-20),
+      },
+    }))
+    try {
+      const response = await api.workspaceAgentTurn({
+        workspace,
+        message,
+        history: history.slice(-20),
+        context: workspaceContext(workspace),
+      })
+      setSession((current) => ({
+        ...current,
+        workspaceChats: {
+          ...current.workspaceChats,
+          [workspace]: [...current.workspaceChats[workspace], { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
+        },
+      }))
+    } catch (reason) {
+      setWorkspaceError((current) => ({
+        ...current,
+        [workspace]: reason instanceof Error ? reason.message : '페이지 전용 AI 요청에 실패했습니다.',
+      }))
+    } finally {
+      setWorkspaceLoading(null)
+    }
+  }
+
+  const clearWorkspaceChat = (workspace: WorkspaceAgentScope) => {
+    setWorkspaceError((current) => ({ ...current, [workspace]: null }))
+    setSession((current) => ({
+      ...current,
+      workspaceChats: {
+        ...current.workspaceChats,
+        [workspace]: createInitialWorkspaceChats()[workspace],
+      },
+    }))
+  }
+
   if (!metadata) {
     return <main className="boot-screen"><div className="loader" /><p>{error || '상권 데이터를 불러오는 중입니다.'}</p></main>
   }
@@ -534,98 +734,199 @@ export default function App() {
       <AgentCommandCenter session={session} loading={loading} />
       <main id="top">
         <section className="workspace">
-          <AgentPanel
-            metadata={metadata}
-            history={session.history}
-            draft={session.draft}
-            phase={session.phase}
-            dataGaps={session.dataGaps}
-            selectedScenarioId={session.selectedScenarioId}
-            comparison={session.comparison}
-            loading={loading}
-            onSend={sendMessage}
-            onConfirm={confirm}
-            onDraftChange={editDraft}
-            onReset={resetConversationAndAnalysis}
-            onRunDemo={runHongdaeCafeDemo}
-          />
+          {outputPage === 'recommendation' && recommendationPage !== 'analysis' ? (
+            <WorkspaceAgentPanel
+              key={recommendationPage}
+              workspace={recommendationPage}
+              history={session.workspaceChats[recommendationPage]}
+              loading={workspaceLoading === recommendationPage}
+              error={workspaceError[recommendationPage]}
+              onSend={(message) => sendWorkspaceMessage(recommendationPage, message)}
+              onClear={() => clearWorkspaceChat(recommendationPage)}
+            />
+          ) : (
+            <AgentPanel
+              metadata={metadata}
+              history={session.history}
+              draft={session.draft}
+              phase={session.phase}
+              dataGaps={session.dataGaps}
+              selectedScenarioId={session.selectedScenarioId}
+              comparison={session.comparison}
+              loading={loading}
+              onSend={sendMessage}
+              onConfirm={confirm}
+              onDraftChange={editDraft}
+              onReset={resetConversationAndAnalysis}
+              onRunDemo={runHongdaeCafeDemo}
+            />
+          )}
           <div className="output-area">
             {error && <div className="error-banner" role="alert">{error} {lastTurn && <button type="button" onClick={() => executeTurn(lastTurn, false)}>다시 시도</button>}</div>}
             {storeError && <div className="error-banner" role="alert">{storeError}</div>}
-            <AgentAnalysisPanels
-              context={session.context}
-              assumptions={session.assumptions}
-              explorationSummary={session.explorationSummary}
-              scenarios={session.scenarios}
-              tradeoffs={session.tradeoffs}
-              relaxationOptions={session.relaxationOptions}
-              selectedScenarioId={session.selectedScenarioId}
-              loading={loading}
-              onSelectScenario={selectScenario}
-              onApplyRelaxation={applyRelaxation}
-              onAssumptionStatus={updateAssumption}
-            />
-            {session.marketLookup && (
-              <MarketLookupCard
-                result={session.marketLookup}
-                position={session.marketLookupIndex}
-                total={session.marketLookupHistory.length}
-                onPrevious={() => showMarketLookup(session.marketLookupIndex - 1)}
-                onNext={() => showMarketLookup(session.marketLookupIndex + 1)}
+            {(outputPage !== 'recommendation' || recommendationPage === 'analysis') && (
+              <OutputPager
+                page={outputPage}
+                lookupCount={session.marketLookupHistory.length}
+                scenarioCount={session.scenarios.length}
+                recommendationCount={session.items.length}
+                onChange={setOutputPage}
               />
             )}
-            {activeFinanceArea ? (
-              <LeaseCandidateWorkspace
-                area={activeFinanceArea}
-                candidates={session.leaseCandidates.filter((item) => item.areaCode === activeFinanceArea.area_code)}
-                selectedId={session.selectedLeaseCandidateId}
-                financeById={session.leaseFinanceById}
-                onBack={() => setSession((current) => ({ ...current, financeAreaCode: null }))}
-                onAdd={() => openLeaseEditor(activeFinanceArea.area_code)}
-                onEdit={(id) => openLeaseEditor(activeFinanceArea.area_code, id)}
-                onDelete={deleteLeaseCandidate}
-                onSelect={(selectedLeaseCandidateId) => setSession((current) => ({ ...current, selectedLeaseCandidateId }))}
-                onFinanceChange={updateLeaseFinance}
-              />
-            ) : activeStoreArea && session.storeAnalysis?.area_code === activeStoreArea.area_code ? (
-              <AreaStoreExplorer
-                area={activeStoreArea}
-                analysis={session.storeAnalysis}
-                relations={session.storeRelations}
-                search={session.storeSearch}
-                selectedStoreId={session.selectedStoreId}
-                research={session.webResearch}
-                researchLoadingKey={researchLoadingKey}
-                leaseCandidateCount={session.leaseCandidates.filter((item) => item.areaCode === activeStoreArea.area_code).length}
-                onBack={() => setSession((current) => ({ ...current, storeAreaCode: null, selectedStoreId: null }))}
-                onRelationsChange={(storeRelations: StoreRelation[]) => setSession((current) => ({ ...current, storeRelations }))}
-                onSearchChange={(storeSearch: string) => setSession((current) => ({ ...current, storeSearch }))}
-                onSelectStore={(selectedStoreId: string | null) => setSession((current) => ({ ...current, selectedStoreId }))}
-                onResearch={runWebResearch}
-                onAddLeaseCandidate={() => openLeaseEditor(activeStoreArea.area_code)}
-                onOpenLeaseCandidates={() => setSession((current) => ({ ...current, financeAreaCode: activeStoreArea.area_code }))}
-              />
-            ) : storeLoading ? (
-              <div className="empty-state"><div className="loader" /><h2>상권 내부 영업 업소를 불러오는 중입니다</h2><p>상권 경계와 공공 API 데이터를 연결하고 있습니다.</p></div>
-            ) : recommendationItemsReady ? (
-              <>
-                <RecommendationMap items={session.items} selected={selected} onSelect={setSelected} onExplore={openStoreExplorer} />
-                <RecommendationResults items={session.items} selectedCode={selected?.area_code || null} onSelect={setSelected} />
-                {selected?.rental_estimate && (
-                  <LeasePlanCard
-                    item={selected}
-                    totalStartupBudgetKrw={session.draft.total_startup_budget_krw}
+            <section className="output-page" aria-live="polite">
+            {outputPage === 'lookup' ? (
+              session.marketLookup ? (
+                <>
+                  <MarketLookupCard
+                    result={session.marketLookup}
+                    position={session.marketLookupIndex}
+                    total={session.marketLookupHistory.length}
+                    onPrevious={() => showMarketLookup(session.marketLookupIndex - 1)}
+                    onNext={() => showMarketLookup(session.marketLookupIndex + 1)}
+                    selectedKey={lookupSelectedKey}
+                    onSelect={setLookupSelectedKey}
                   />
+                  {activeMappableLookup && (
+                    <MarketLookupMap
+                      result={activeMappableLookup}
+                      selectedKey={lookupSelectedKey}
+                      onSelect={setLookupSelectedKey}
+                    />
+                  )}
+                </>
+              ) : (
+                <div className="page-empty-state">
+                  <strong>아직 일반조회 결과가 없습니다</strong>
+                  <p>대화창에서 “매출 높은 상권 5곳”처럼 바로 물어보세요.</p>
+                </div>
+              )
+            ) : outputPage === 'strategy' ? (
+              <>
+                <AgentAnalysisPanels
+                  context={session.context}
+                  assumptions={session.assumptions}
+                  explorationSummary={session.explorationSummary}
+                  scenarios={session.scenarios}
+                  tradeoffs={session.tradeoffs}
+                  relaxationOptions={session.relaxationOptions}
+                  selectedScenarioId={session.selectedScenarioId}
+                  loading={loading}
+                  onSelectScenario={selectScenario}
+                  onApplyRelaxation={applyRelaxation}
+                  onAssumptionStatus={updateAssumption}
+                />
+                {!hasStrategyContent && (
+                  <div className="page-empty-state">
+                    <strong>창업 맥락과 전략 가설을 준비합니다</strong>
+                    <p>왼쪽 대화창에 준비 중인 업종을 알려주면 조건과 전략을 정리합니다.</p>
+                  </div>
                 )}
-                {session.recommendationReport && <RecommendationReportView report={session.recommendationReport} />}
               </>
             ) : (
-              <div className="empty-state">
-                <div className="compass">⌖</div>
-                <h2>{loading && session.phase === 'results' ? '상권 경계를 불러오는 중입니다' : 'AI와 조건을 정리하면 추천 지도가 열립니다'}</h2>
-                <p>{loading && session.phase === 'results' ? '기존 추천 결과에 실제 면적 데이터를 연결하고 있습니다.' : '왼쪽 대화창에 업종과 원하는 입지를 편하게 설명해보세요.'}</p>
-              </div>
+              <>
+                <nav className="recommendation-page-arrows" aria-label="입지분석 페이지 이동">
+                  {previousRecommendationPage && (
+                    <button
+                      type="button"
+                      className="previous"
+                      aria-label={`이전 페이지: ${recommendationPageLabels[previousRecommendationPage]}`}
+                      onClick={() => changeRecommendationPage(previousRecommendationPage)}
+                    >
+                      <b aria-hidden="true">←</b>
+                      <span><small>이전</small><strong>{recommendationPageLabels[previousRecommendationPage]}</strong></span>
+                    </button>
+                  )}
+                  {nextRecommendationPage && (
+                    <button
+                      type="button"
+                      className="next"
+                      aria-label={`다음 페이지: ${recommendationPageLabels[nextRecommendationPage]}`}
+                      onClick={() => changeRecommendationPage(nextRecommendationPage)}
+                    >
+                      <span><small>다음</small><strong>{recommendationPageLabels[nextRecommendationPage]}</strong></span>
+                      <b aria-hidden="true">→</b>
+                    </button>
+                  )}
+                </nav>
+                <section className="recommendation-page">
+                  {recommendationPage === 'analysis' ? (
+                    recommendationItemsReady ? (
+                      <>
+                        <RecommendationMap items={session.items} selected={selected} onSelect={setSelected} onExplore={openStoreExplorer} />
+                        <RecommendationResults items={session.items} selectedCode={selected?.area_code || null} onSelect={setSelected} />
+                        {selected?.rental_estimate && (
+                          <LeasePlanCard
+                            item={selected}
+                            totalStartupBudgetKrw={session.draft.total_startup_budget_krw}
+                          />
+                        )}
+                        {session.recommendationReport && <RecommendationReportView report={session.recommendationReport} />}
+                      </>
+                    ) : (
+                      <div className="empty-state">
+                        <div className="compass">⌖</div>
+                        <h2>{loading && session.phase === 'results' ? '상권 경계를 불러오는 중입니다' : 'AI와 조건을 정리하면 추천 지도가 열립니다'}</h2>
+                        <p>{loading && session.phase === 'results' ? '기존 추천 결과에 실제 면적 데이터를 연결하고 있습니다.' : '왼쪽 대화창에 업종과 원하는 입지를 편하게 설명해보세요.'}</p>
+                      </div>
+                    )
+                  ) : recommendationPage === 'stores' ? (
+                    storeLoading ? (
+                      <div className="empty-state"><div className="loader" /><h2>상권 내부 영업 업소를 불러오는 중입니다</h2><p>상권 경계와 공공 API 데이터를 연결하고 있습니다.</p></div>
+                    ) : activeStoreArea && session.storeAnalysis?.area_code === activeStoreArea.area_code ? (
+                      <AreaStoreExplorer
+                        area={activeStoreArea}
+                        analysis={session.storeAnalysis}
+                        relations={session.storeRelations}
+                        search={session.storeSearch}
+                        selectedStoreId={session.selectedStoreId}
+                        research={session.webResearch}
+                        researchLoadingKey={researchLoadingKey}
+                        leaseCandidateCount={session.leaseCandidates.filter((item) => item.areaCode === activeStoreArea.area_code).length}
+                        onRelationsChange={(storeRelations: StoreRelation[]) => setSession((current) => ({ ...current, storeRelations }))}
+                        onSearchChange={(storeSearch: string) => setSession((current) => ({ ...current, storeSearch }))}
+                        onSelectStore={(selectedStoreId: string | null) => setSession((current) => ({ ...current, selectedStoreId }))}
+                        onResearch={runWebResearch}
+                        onAddLeaseCandidate={() => openLeaseEditor(activeStoreArea.area_code)}
+                        onOpenLeaseCandidates={() => {
+                          setSession((current) => ({
+                            ...current,
+                            financeAreaCode: activeStoreArea.area_code,
+                            workspaceChats: current.financeAreaCode === activeStoreArea.area_code
+                              ? current.workspaceChats
+                              : { ...current.workspaceChats, finance: createInitialWorkspaceChats().finance },
+                          }))
+                          setRecommendationPage('finance')
+                        }}
+                      />
+                    ) : recommendationTargetArea ? (
+                      <div className="page-empty-state">
+                        <strong>{recommendationTargetArea.area_name} 상권의 점포를 분석할까요?</strong>
+                        <p>현재 영업 중인 점포를 경쟁점·보완업종·생활시설로 나눠 지도에서 살펴봅니다.</p>
+                        <button type="button" onClick={() => openStoreExplorer(recommendationTargetArea)}>점포 분석 시작</button>
+                      </div>
+                    ) : (
+                      <div className="page-empty-state"><strong>먼저 분석할 상권이 필요합니다</strong><p>상권분석에서 추천 결과를 만든 뒤 점포 분석을 시작할 수 있습니다.</p></div>
+                    )
+                  ) : activeFinanceArea ? (
+                    <LeaseCandidateWorkspace
+                      area={activeFinanceArea}
+                      candidates={session.leaseCandidates.filter((item) => item.areaCode === activeFinanceArea.area_code)}
+                      selectedId={session.selectedLeaseCandidateId}
+                      financeById={session.leaseFinanceById}
+                      onBack={() => setRecommendationPage(activeStoreArea ? 'stores' : 'analysis')}
+                      onAdd={() => openLeaseEditor(activeFinanceArea.area_code)}
+                      onEdit={(id) => openLeaseEditor(activeFinanceArea.area_code, id)}
+                      onDelete={deleteLeaseCandidate}
+                      onSelect={(selectedLeaseCandidateId) => setSession((current) => ({ ...current, selectedLeaseCandidateId }))}
+                      onFinanceChange={updateLeaseFinance}
+                    />
+                  ) : (
+                    <div className="page-empty-state"><strong>먼저 자금계획을 세울 상권이 필요합니다</strong><p>상권분석에서 추천 결과를 만든 뒤 임대매물과 창업비를 계산할 수 있습니다.</p></div>
+                  )}
+                </section>
+              </>
             )}
+            </section>
           </div>
         </section>
       </main>

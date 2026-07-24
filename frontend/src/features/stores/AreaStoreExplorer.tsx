@@ -131,7 +131,6 @@ interface Props {
   research: WebResearchResponse[]
   researchLoadingKey: string | null
   leaseCandidateCount: number
-  onBack: () => void
   onRelationsChange: (relations: StoreRelation[]) => void
   onSearchChange: (value: string) => void
   onSelectStore: (storeId: string | null) => void
@@ -142,7 +141,7 @@ interface Props {
 
 export function AreaStoreExplorer({
   area, analysis, relations, search, selectedStoreId, research, researchLoadingKey, leaseCandidateCount,
-  onBack, onRelationsChange, onSearchChange, onSelectStore, onResearch, onAddLeaseCandidate, onOpenLeaseCandidates,
+  onRelationsChange, onSearchChange, onSelectStore, onResearch, onAddLeaseCandidate, onOpenLeaseCandidates,
 }: Props) {
   const selectedStore = analysis.stores.find((store) => store.store_id === selectedStoreId) || null
   const filteredStores = filterStores(analysis.stores, relations, search)
@@ -160,7 +159,6 @@ export function AreaStoreExplorer({
   return (
     <div className="store-explorer">
       <header className="store-explorer-header">
-        <button type="button" className="back-button" onClick={onBack}>← 추천 결과</button>
         <div><span>추천 {area.rank}위 상권 상세</span><h2>{area.area_name}</h2><p>{area.district_name} · {area.industry_name}</p></div>
         <div className="store-header-actions"><button type="button" className="research-button" disabled={researchLoadingKey !== null} onClick={() => onResearch('area')}>{researchLoadingKey === 'area' ? '최신 정보 검색 중…' : '상권 최신 정보 검색'}</button><button type="button" className="lease-add-button" onClick={onAddLeaseCandidate}>+ 임대매물 추가</button>{leaseCandidateCount > 0 && <button type="button" className="lease-shortlist-button" onClick={onOpenLeaseCandidates}>매물 후보함 {leaseCandidateCount}건 →</button>}</div>
       </header>

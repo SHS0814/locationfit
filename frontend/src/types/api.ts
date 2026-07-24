@@ -410,6 +410,23 @@ export interface MarketLookupResult {
   disclosure: string
 }
 
+export interface MarketGeographyRequest {
+  group_by: 'area' | 'district'
+  entity_keys: string[]
+}
+
+export interface MarketGeographyFeature {
+  entity_key: string
+  entity_name: string
+  boundary: AreaBoundary
+}
+
+export interface MarketGeographyResponse {
+  request_id: string
+  group_by: 'area' | 'district'
+  features: MarketGeographyFeature[]
+}
+
 export interface AreaComparison {
   area_code: string
   area_name: string
@@ -527,4 +544,19 @@ export interface AgentTurnResponse {
   comparison: AreaComparison[]
   recommendation_report: RecommendationReport | null
   market_lookup: MarketLookupResult | null
+}
+
+export type WorkspaceAgentScope = 'stores' | 'finance'
+
+export interface WorkspaceAgentTurnRequest {
+  workspace: WorkspaceAgentScope
+  message: string
+  history: AgentMessage[]
+  context: Record<string, unknown>
+}
+
+export interface WorkspaceAgentTurnResponse {
+  request_id: string
+  workspace: WorkspaceAgentScope
+  assistant_message: string
 }

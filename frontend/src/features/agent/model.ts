@@ -17,6 +17,7 @@ import type {
   StoreRelation,
   WebResearchResponse,
   ActiveMarketLookupQuery,
+  WorkspaceAgentScope,
 } from '../../types/api'
 import type { LeaseCandidateFinanceState, LeaseCandidateRecord } from '../finance/model'
 
@@ -75,6 +76,15 @@ export const initialMessages: AgentMessage[] = [{
   content: '입지를 추천받거나 상권 통계를 바로 조회할 수 있어요. 말하지 않은 조건은 전체 범위로 보고, 확실히 알려주신 조건만 반영합니다.',
 }]
 
+export type WorkspaceChats = Record<WorkspaceAgentScope, AgentMessage[]>
+
+export function createInitialWorkspaceChats(): WorkspaceChats {
+  return {
+    stores: [{ role: 'assistant', content: '이 대화에서는 선택한 상권 내부의 경쟁점·보완업종·주변시설과 선택 업소만 분석합니다.' }],
+    finance: [{ role: 'assistant', content: '이 대화에서는 현재 임대매물 후보의 비용과 자금계획·정책지원 1차 후보만 설명합니다.' }],
+  }
+}
+
 export interface AgentSession {
   schemaVersion: 8
   history: AgentMessage[]
@@ -106,6 +116,7 @@ export interface AgentSession {
   leaseFinanceById: Record<string, LeaseCandidateFinanceState>
   selectedLeaseCandidateId: string | null
   financeAreaCode: string | null
+  workspaceChats: WorkspaceChats
 }
 
 export type AgentCommandStageId =
@@ -163,6 +174,7 @@ export const initialSession: AgentSession = {
   leaseFinanceById: {},
   selectedLeaseCandidateId: null,
   financeAreaCode: null,
+  workspaceChats: createInitialWorkspaceChats(),
 }
 
 export const hongdaeCafeDemoDraft: RecommendationDraft = {
@@ -431,6 +443,12 @@ export function restoreSession(raw: string | null): AgentSession {
       selectedLeaseCandidateId: currentSchema && typeof parsed.selectedLeaseCandidateId === 'string'
         ? parsed.selectedLeaseCandidateId : null,
       financeAreaCode: currentSchema && typeof parsed.financeAreaCode === 'string' ? parsed.financeAreaCode : null,
+      workspaceChats: currentSchema && parsed.workspaceChats && typeof parsed.workspaceChats === 'object'
+        ? {
+            stores: Array.isArray(parsed.workspaceChats.stores) ? parsed.workspaceChats.stores.slice(-20) : createInitialWorkspaceChats().stores,
+            finance: Array.isArray(parsed.workspaceChats.finance) ? parsed.workspaceChats.finance.slice(-20) : createInitialWorkspaceChats().finance,
+          }
+        : createInitialWorkspaceChats(),
     }
   } catch {
     return initialSession
