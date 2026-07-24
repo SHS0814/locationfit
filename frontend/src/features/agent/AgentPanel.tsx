@@ -39,6 +39,7 @@ interface Props {
   onAssumptionStatus: (id: string, status: AgentAssumption['status']) => void
   onDraftChange: (draft: RecommendationDraft) => void
   onReset: () => void
+  onRunDemo: () => void
 }
 
 const importanceFields: Array<{ key: keyof RecommendationDraft; label: string }> = [
@@ -54,11 +55,18 @@ const importanceFields: Array<{ key: keyof RecommendationDraft; label: string }>
   { key: 'culture_facility_importance', label: '문화시설' },
 ]
 
+const followUpPrompts = [
+  '1위가 추천된 핵심 이유를 자세히 설명해줘',
+  '1위와 2위 후보의 차이를 비교해줘',
+  '가장 주의해서 볼 지표가 뭐야?',
+  '이 추천의 데이터 출처와 점수 산식을 설명해줘',
+]
+
 export function AgentPanel({
   metadata, history, draft, phase, context, assumptions, explorationSummary, scenarios,
   tradeoffs, relaxationOptions, dataGaps, selectedScenarioId, comparison, marketLookup, loading,
   onSend, onConfirm, onSelectScenario, onApplyRelaxation, onAssumptionStatus, onDraftChange,
-  onReset,
+  onReset, onRunDemo,
 }: Props) {
   const [message, setMessage] = useState('')
   const [areaUnit, setAreaUnit] = useState<'sqm' | 'pyeong'>('sqm')
@@ -78,12 +86,17 @@ export function AgentPanel({
       <div className="agent-heading">
         <div className="agent-heading-top">
           <span className="eyebrow">AI LOCATION AGENT</span>
-          <button type="button" onClick={onReset} disabled={loading} aria-label="대화와 분석 결과 초기화">
-            대화·분석 초기화
-          </button>
+          <span className="agent-heading-actions">
+            <button type="button" onClick={onRunDemo} disabled={loading} aria-label="홍대 커피 매장 데모 불러오기">
+              데모 불러오기
+            </button>
+            <button type="button" onClick={onReset} disabled={loading} aria-label="대화와 분석 결과 초기화">
+              대화·분석 초기화
+            </button>
+          </span>
         </div>
-        <h2>추천도, 상권 조회도 대화로</h2>
-        <p>입지 조건은 함께 정리하고, 매출·폐업률 같은 통계는 바로 조회합니다.</p>
+        <h2>AI에게 사업 조건 전달</h2>
+        <p>AI가 조건을 구조화하고 시장 탐색부터 매물·자금계획까지 단계별로 지휘합니다.</p>
       </div>
 
       <div className="chat-log" aria-live="polite">
@@ -93,7 +106,7 @@ export function AgentPanel({
             <p>{item.content}</p>
           </div>
         ))}
-        {loading && <div className="chat-message assistant pending"><span>AI</span><p>조건과 데이터를 확인하고 있어요…</p></div>}
+        {loading && <div className="chat-message assistant pending"><span>AI</span><p>다음 단계에 필요한 데이터와 분석 도구를 확인하고 있어요…</p></div>}
       </div>
 
       <form className="chat-composer" onSubmit={submit}>
@@ -104,11 +117,19 @@ export function AgentPanel({
           maxLength={2000}
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          placeholder="예: 매출 높은 상권 5곳 알려줘"
+          placeholder={phase === 'results' ? '추천 결과에서 궁금한 점을 물어보세요' : '예: 매출 높은 상권 5곳 알려줘'}
           disabled={loading}
         />
         <button type="submit" disabled={loading || !message.trim()}>보내기</button>
       </form>
+
+      {phase === 'results' && (
+        <div className="follow-up-prompts" aria-label="추천 결과 후속 질문">
+          {followUpPrompts.map((prompt) => (
+            <button key={prompt} type="button" disabled={loading} onClick={() => onSend(prompt)}>{prompt}</button>
+          ))}
+        </div>
+      )}
 
       {marketLookup && (
         <section className="lookup-card" aria-label="상권 통계 조회 결과">
@@ -215,7 +236,7 @@ export function AgentPanel({
         <div className="condition-heading">
           <div><span>추천 조건</span><strong>{phaseLabel(phase, selectedScenarioId)}</strong></div>
           <select value={draft.top_n} onChange={(event) => update('top_n', Number(event.target.value))} aria-label="추천 결과 개수">
-            {[5, 10, 15, 20].map((count) => <option key={count} value={count}>{count}곳</option>)}
+            {[3, 5, 10, 15, 20].map((count) => <option key={count} value={count}>{count}곳</option>)}
           </select>
         </div>
 

@@ -71,6 +71,31 @@ def test_recommendation_report_compares_top_three_with_full_eligible_median() ->
     assert repeated_diagnostics == diagnostics
 
 
+def test_recommendation_evidence_context_exposes_sources_methodology_and_limits() -> None:
+    service = RecommenderService(ARTIFACT_DIR)
+    request = RecommendationRequestSchema(
+        industry_code="CS100001",
+        target_age_groups=["20"],
+        strategy="growth",
+        top_n=3,
+    )
+    _, diagnostics, _ = service.recommend_with_report(request)
+    context = service.recommendation_evidence_context(request, diagnostics)
+
+    assert context["artifact_version"] == "2025q4-v2"
+    assert context["data_period"]["performance"] == "2021Q1~2025Q4"
+    assert {source["dataset_id"] for source in context["sources"]} >= {
+        "OA-15572", "OA-15577", "OA-15568",
+    }
+    assert context["scoring"]["strategy"] == "growth"
+    assert context["scoring"]["final_weights"] == {
+        "condition_fit_score": 0.45,
+        "reliability_adjusted_evidence_score": 0.55,
+    }
+    assert "실제 개별 점포 매출" in context["limitations"][0]
+    assert "성공 확률" in context["limitations"][1]
+
+
 def test_strategy_scenarios_and_market_landscape_use_real_artifacts() -> None:
     service = RecommenderService(ARTIFACT_DIR)
     request = RecommendationRequestSchema(

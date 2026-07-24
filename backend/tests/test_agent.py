@@ -93,6 +93,18 @@ class MarketLookupRunner:
         )
 
 
+class MarketLookupFollowUpRunner:
+    async def run(self, payload, recommender, metadata) -> AgentExecution:
+        assert payload.active_market_lookup_query is not None
+        return AgentExecution(AgentDecision(
+            assistant_message=(
+                "관측 상권 10곳은 도봉구에서 치과의원 폐업률 값이 존재해 "
+                "집계에 포함된 고유 서울시 상권 10개를 뜻합니다."
+            ),
+            draft=payload.draft,
+        ))
+
+
 def test_agent_explores_three_scenarios_without_final_recommendation() -> None:
     runner = ReadyRunner()
     service = LocationAgentService(
@@ -163,11 +175,48 @@ def test_confirm_action_returns_deterministic_recommendations() -> None:
     assert result["recommendation_report"] is not None
     assert len(result["recommendation_report"]["areas"]) == 3
     assert result["recommendations"][0]["area_name"] in result["assistant_message"]
-    assert "중앙값" in result["assistant_message"]
-    assert "동종업종 점포" in result["assistant_message"]
-    assert "점포 밀도" in result["assistant_message"]
+    assert "AI 입지 에이전트" in result["assistant_message"]
+    assert "추천 분석 도구" in result["assistant_message"]
+    assert "자세한 수치는 아래 보고서" in result["assistant_message"]
+    assert "중앙값" not in result["assistant_message"]
+    assert "동종업종 점포" not in result["assistant_message"]
+    assert "점포 밀도" not in result["assistant_message"]
     assert "경쟁강도" not in result["assistant_message"]
-    assert runner.actions == ["confirm_recommendation"]
+    assert runner.actions == []
+
+
+def test_confirm_action_does_not_require_openai_runner() -> None:
+    class FailingRunner:
+        async def run(self, payload, recommender, metadata) -> AgentExecution:
+            raise AssertionError("confirm_recommendation must not call the AI runner")
+
+    service = LocationAgentService(
+        RecommenderService(ARTIFACT_DIR), FailingRunner(), timeout_seconds=1,
+    )
+    draft = RecommendationDraft(
+        industry_code="CS100010",
+        preferred_districts=["마포구"],
+        target_age_groups=["20"],
+        weekend_importance=0.8,
+        top_n=3,
+        strategy="growth",
+        total_startup_budget_krw=150_000_000,
+        monthly_converted_rent_limit_krw=5_000_000,
+        rentable_area_sqm=66,
+        floor="f1",
+    )
+    result = asyncio.run(service.turn(AgentTurnRequest(
+        action="confirm_recommendation",
+        message="데모 조건으로 분석해주세요.",
+        draft=draft,
+        selected_scenario_id="growth",
+    )))
+
+    assert result["phase"] == "results"
+    assert result["selected_scenario_id"] == "growth"
+    assert len(result["recommendations"]) == 3
+    assert result["recommendations"][0]["district_name"] == "마포구"
+    assert result["recommendation_report"]["candidate_count"] > 0
 
 
 def test_agent_api_contract_with_injected_runner() -> None:
@@ -225,6 +274,8 @@ def test_select_scenario_requires_confirmation_before_final_result() -> None:
     assert result["phase"] == "ready_for_confirmation"
     assert result["draft"].strategy == "stability"
     assert result["recommendations"] == []
+    assert result["assistant_message"].startswith("AI가 안정성 우선형을 주 전략으로 설정")
+    assert "추천 분석 도구" in result["assistant_message"]
     assert "안정성 우선형" in result["confirmation_summary"]
 
 
@@ -325,3 +376,25 @@ def test_market_lookup_api_contract() -> None:
         assert lookup["distribution"]["population_count"] >= len(lookup["rows"])
         assert lookup["distribution"]["mean_display"].endswith("%")
         assert lookup["rows"][0]["metric_display_value"].endswith("%")
+
+
+def test_market_lookup_follow_up_preserves_verified_lookup_context() -> None:
+    service = LocationAgentService(
+        RecommenderService(ARTIFACT_DIR), MarketLookupFollowUpRunner(), timeout_seconds=1,
+    )
+    result = asyncio.run(service.turn(AgentTurnRequest(
+        message="관측 상권 10곳이 무슨 뜻이야?",
+        active_market_lookup_query={
+            "group_by": "industry",
+            "metric": "closing_rate",
+            "top_n": 3,
+            "order": "asc",
+            "district_name": "도봉구",
+        },
+    )))
+
+    assert result["phase"] == "discovering"
+    assert result["market_lookup"]["rows"][0]["entity_name"] == "치과의원"
+    assert result["market_lookup"]["rows"][0]["area_count"] == 10
+    assert "고유 서울시 상권 10개" in result["assistant_message"]
+    assert result["scenarios"] == []

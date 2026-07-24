@@ -492,6 +492,17 @@ export interface AgentTurnRequest {
   selected_scenario_id: 'condition_fit' | 'growth' | 'stability' | null
   analysis_revision: number
   active_recommendation_request: RecommendationRequest | null
+  active_market_lookup_query?: ActiveMarketLookupQuery | null
+}
+
+export interface ActiveMarketLookupQuery {
+  group_by: MarketLookupResult['group_by']
+  metric: MarketLookupResult['metric']
+  top_n: number
+  order: MarketLookupResult['order']
+  district_name: string | null
+  admin_dong_name: string | null
+  industry_code: string | null
 }
 
 export interface AgentTurnResponse {

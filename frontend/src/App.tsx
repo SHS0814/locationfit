@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from './api/client'
 import { RecommendationMap } from './components/map/RecommendationMap'
 import { AgentPanel } from './features/agent/AgentPanel'
+import { AgentCommandCenter } from './features/agent/AgentCommandCenter'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
@@ -11,11 +12,16 @@ import {
   AGENT_V4_SESSION_KEY,
   AGENT_V2_SESSION_KEY,
   AGENT_V3_SESSION_KEY,
+  createDemoLeaseCandidate,
+  createDemoLeaseFinanceState,
   draftToRequest,
+  createHongdaeCafeDemoSession,
   initialSession,
   hasAreaBoundary,
   isDraftReady,
+  marketLookupToQuery,
   restoreSession,
+  shouldRunDemoFlow,
   type AgentSession,
 } from './features/agent/model'
 import { RecommendationResults } from './features/recommendation/RecommendationResults'
@@ -48,6 +54,7 @@ export default function App() {
   const [researchLoadingKey, setResearchLoadingKey] = useState<string | null>(null)
   const [leaseEditorAreaCode, setLeaseEditorAreaCode] = useState<string | null>(null)
   const [editingLeaseCandidateId, setEditingLeaseCandidateId] = useState<string | null>(null)
+  const demoStarted = useRef(false)
   const recommendationItemsReady = session.items.length > 0 && session.items.every(hasAreaBoundary)
 
   useEffect(() => {
@@ -57,6 +64,12 @@ export default function App() {
   useEffect(() => {
     sessionStorage.setItem(AGENT_SESSION_KEY, JSON.stringify(session))
   }, [session])
+
+  useEffect(() => {
+    if (!metadata || demoStarted.current || !shouldRunDemoFlow(window.location.search)) return
+    demoStarted.current = true
+    runHongdaeCafeDemo()
+  }, [metadata])
 
   useEffect(() => {
     if (!metadata || session.phase !== 'results' || recommendationItemsReady || !session.activeRequest) return
@@ -148,6 +161,106 @@ export default function App() {
     }
   }
 
+  const runHongdaeCafeDemo = async () => {
+    const baseSession = createHongdaeCafeDemoSession()
+    setSession(baseSession)
+    setSelected(null)
+    setLoading(true)
+    setError(null)
+    setLastTurn(null)
+    setStoreError(null)
+    setLeaseEditorAreaCode(null)
+    setEditingLeaseCandidateId(null)
+    try {
+      const scenarioResponse = await api.agentTurn({
+        action: 'select_scenario',
+        message: '성장 기회형 시나리오를 선택합니다.',
+        history: baseSession.history.slice(-20),
+        draft: baseSession.draft,
+        context: baseSession.context,
+        assumptions: baseSession.assumptions,
+        scenario_id: 'growth',
+        selected_scenario_id: 'growth',
+        analysis_revision: baseSession.analysisRevision,
+        active_recommendation_request: null,
+      })
+      const scenarioSession: AgentSession = {
+        ...baseSession,
+        history: [
+          ...baseSession.history,
+          { role: 'assistant' as const, content: scenarioResponse.assistant_message },
+        ].slice(-20),
+        draft: scenarioResponse.draft,
+        phase: scenarioResponse.phase,
+        context: scenarioResponse.context,
+        assumptions: scenarioResponse.assumptions,
+        explorationSummary: scenarioResponse.exploration_summary,
+        scenarios: scenarioResponse.scenarios,
+        tradeoffs: scenarioResponse.tradeoffs,
+        relaxationOptions: scenarioResponse.relaxation_options,
+        dataGaps: scenarioResponse.data_gaps,
+        selectedScenarioId: scenarioResponse.selected_scenario_id,
+        analysisRevision: scenarioResponse.analysis_revision,
+      }
+      setSession(scenarioSession)
+
+      const confirmResponse = await api.agentTurn({
+        action: 'confirm_recommendation',
+        message: '조건 카드를 확인했습니다. 이 조건으로 추천을 실행해주세요.',
+        history: scenarioSession.history.slice(-20),
+        draft: scenarioResponse.draft,
+        context: scenarioResponse.context,
+        assumptions: scenarioResponse.assumptions,
+        scenario_id: null,
+        selected_scenario_id: scenarioResponse.selected_scenario_id,
+        analysis_revision: scenarioResponse.analysis_revision,
+        active_recommendation_request: null,
+      })
+      if (!confirmResponse.recommendations.every(hasAreaBoundary)) {
+        throw new Error('상권 경계 데이터를 받지 못했습니다. API 서버를 재시작해주세요.')
+      }
+      const demoArea = confirmResponse.recommendations[0] || null
+      const demoLeaseCandidate = demoArea ? createDemoLeaseCandidate(demoArea) : null
+      const nextSession: AgentSession = {
+        ...scenarioSession,
+        history: [
+          ...scenarioSession.history,
+          { role: 'assistant' as const, content: confirmResponse.assistant_message },
+        ].slice(-20),
+        draft: confirmResponse.draft,
+        phase: confirmResponse.phase,
+        context: confirmResponse.context,
+        assumptions: confirmResponse.assumptions,
+        dataGaps: confirmResponse.data_gaps,
+        selectedScenarioId: confirmResponse.selected_scenario_id,
+        analysisRevision: confirmResponse.analysis_revision,
+        items: confirmResponse.recommendations,
+        comparison: confirmResponse.comparison,
+        recommendationReport: confirmResponse.recommendation_report,
+        activeRequest: draftToRequest(confirmResponse.draft),
+        marketLookup: null,
+        storeAreaCode: null,
+        storeAnalysis: null,
+        selectedStoreId: null,
+        storeRelations: ['competitor', 'complementary', 'daily_life', 'other'],
+        storeSearch: '',
+        webResearch: [],
+        leaseCandidates: demoLeaseCandidate ? [demoLeaseCandidate] : [],
+        leaseFinanceById: demoLeaseCandidate ? {
+          [demoLeaseCandidate.id]: createDemoLeaseFinanceState(),
+        } : {},
+        selectedLeaseCandidateId: demoLeaseCandidate?.id || null,
+        financeAreaCode: demoArea?.area_code || null,
+      }
+      setSession(nextSession)
+      setSelected(confirmResponse.recommendations[0] || null)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '데모 흐름을 불러오지 못했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const sendMessage = (message: string) => executeTurn({
     action: 'message',
     message,
@@ -159,6 +272,7 @@ export default function App() {
     selected_scenario_id: session.selectedScenarioId,
     analysis_revision: session.analysisRevision,
     active_recommendation_request: session.activeRequest,
+    active_market_lookup_query: marketLookupToQuery(session.marketLookup),
   }, true)
 
   const selectScenario = (scenarioId: 'condition_fit' | 'growth' | 'stability') => executeTurn({
@@ -436,8 +550,10 @@ export default function App() {
             onAssumptionStatus={updateAssumption}
             onDraftChange={editDraft}
             onReset={resetConversationAndAnalysis}
+            onRunDemo={runHongdaeCafeDemo}
           />
           <div className="output-area">
+            <AgentCommandCenter session={session} loading={loading} />
             {error && <div className="error-banner" role="alert">{error} {lastTurn && <button type="button" onClick={() => executeTurn(lastTurn, false)}>다시 시도</button>}</div>}
             {storeError && <div className="error-banner" role="alert">{storeError}</div>}
             {activeFinanceArea ? (

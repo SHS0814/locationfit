@@ -126,6 +126,62 @@ class RecommenderService:
             "rent_floors": self.cost_provider.options(),
         }
 
+    def recommendation_evidence_context(
+        self,
+        payload: RecommendationRequestSchema,
+        diagnostics: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Describe provenance and scoring without exposing raw artifacts."""
+        periods = self.manifest.get("data_period", {})
+        return {
+            "artifact_version": self.artifact_version,
+            "data_period": periods,
+            "sources": [
+                {"metrics": "상권 경계", "name": "서울시 상권분석서비스(영역-상권)", "dataset_id": "OA-15560"},
+                {"metrics": "추정매출·성장률", "name": "서울시 상권분석서비스(추정매출-상권)", "dataset_id": "OA-15572"},
+                {"metrics": "점포 수·폐업률", "name": "서울시 상권분석서비스(점포-상권)", "dataset_id": "OA-15577"},
+                {"metrics": "유동인구", "name": "서울시 상권분석서비스(길단위인구-상권)", "dataset_id": "OA-15568"},
+                {"metrics": "상주인구", "name": "서울시 상권분석서비스(상주인구-상권)", "dataset_id": "OA-15584"},
+                {"metrics": "직장인구", "name": "서울시 상권분석서비스(직장인구-상권)", "dataset_id": "OA-15569"},
+                {
+                    "metrics": "환산임대료",
+                    "name": self.manifest.get(
+                        "commercial_rent_source",
+                        "서울시 상권분석서비스 임대시세",
+                    ),
+                    "dataset_id": None,
+                },
+            ],
+            "metric_definitions": {
+                "recent_4q_average_sales": "최근 4개 분기의 분기 추정매출 평균",
+                "recent_4q_growth_rate": "최근 4개 분기와 직전 4개 분기의 추정매출 변화율",
+                "recent_store_count": "최신 관측 분기의 선택 업종 점포 수",
+                "same_industry_store_density": "상권 면적 1㎢당 선택 업종 점포 수",
+                "closing_rate": "관측 점포 데이터의 폐업률",
+                "population_metrics": "최근 관측 분기들의 상권별 평균 인구",
+                "estimated_converted_monthly_rent_krw": "행정동 임대시세에 입력 면적을 적용한 월 환산임대료 추정치",
+            },
+            "scoring": {
+                "strategy": payload.strategy,
+                "final_weights": diagnostics.get("final_weights", {}),
+                "evidence_group_weights": diagnostics.get("evidence_group_weights", {}),
+                "condition_fit": "사용자가 지정한 고객·시간·입지 특성과 상권 구조의 가중 거리 기반 적합도",
+                "performance_evidence": "동일 업종 내 관측 성과를 백분위화한 뒤 데이터 신뢰도에 따라 업종 평균 쪽으로 보정",
+                "budget_adjustment": (
+                    "기존 종합점수 80%와 임대예산 적합도 20%를 결합"
+                    if diagnostics.get("budget_adjusted") else
+                    "임대예산에 따른 순위 재조정 없음"
+                ),
+                "benchmark": "현재 필터를 통과한 동일 조건 전체 후보의 중앙값",
+            },
+            "limitations": [
+                "매출은 관측된 추정매출이며 실제 개별 점포 매출이나 미래 매출 예측이 아닙니다.",
+                "추천 점수는 후보 간 비교용 모델 점수이며 성공 확률이 아닙니다.",
+                "환산임대료는 관리비·부가가치세를 제외한 추정치입니다.",
+                "추천 상담 중에는 배포 아티팩트를 사용하며 서울시 원천 API를 실시간 조회하지 않습니다.",
+            ],
+        }
+
     def lookup_market_rankings(
         self,
         *,

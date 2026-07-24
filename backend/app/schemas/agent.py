@@ -95,6 +95,22 @@ class AgentDecision(BaseModel):
     comparison_area_codes: list[str] = Field(default_factory=list, max_length=5)
 
 
+class ActiveMarketLookupQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    group_by: Literal["area", "industry", "district", "admin_dong"]
+    metric: Literal[
+        "sales", "closing_rate", "opening_rate", "growth_rate",
+        "store_count", "store_density", "floating_population",
+        "resident_population", "worker_population",
+    ]
+    top_n: int = Field(ge=1, le=50)
+    order: Literal["desc", "asc"]
+    district_name: str | None = Field(default=None, max_length=40)
+    admin_dong_name: str | None = Field(default=None, max_length=40)
+    industry_code: str | None = Field(default=None, max_length=20)
+
+
 class AgentTurnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -108,6 +124,7 @@ class AgentTurnRequest(BaseModel):
     selected_scenario_id: Literal["condition_fit", "growth", "stability"] | None = None
     analysis_revision: int = Field(0, ge=0)
     active_recommendation_request: RecommendationRequestSchema | None = None
+    active_market_lookup_query: ActiveMarketLookupQuery | None = None
 
     @model_validator(mode="after")
     def confirmation_requires_ready_draft(self) -> "AgentTurnRequest":

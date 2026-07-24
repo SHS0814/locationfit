@@ -170,6 +170,9 @@ class MarketLookupService:
             disclosure_parts.append(
                 "동 단위 조회는 서울시 상권영역 데이터의 대표 행정동 기준이며 법정동 경계 집계가 아닙니다."
             )
+        disclosure_parts.append(
+            "관측 상권은 선택한 지역 안에서 해당 업종과 지표 값이 존재해 집계에 실제 포함된 고유 서울시 상권입니다."
+        )
         disclosure_parts.extend([
             "매출은 최근 4개 관측 분기의 분기 평균 추정매출이고, 관측된 지원 상권·업종을 합산합니다.",
             "폐업률·개업률은 최근 점포 수 가중평균입니다.",

@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { draftToRequest, emptyDraft, isDraftReady, restoreSession } from './model'
+import {
+  DEMO_FLOW_QUERY_VALUE,
+  createDemoLeaseCandidate,
+  createDemoLeaseFinanceState,
+  createAgentBriefing,
+  createHongdaeCafeDemoSession,
+  deriveAgentCommandStages,
+  draftToRequest,
+  emptyDraft,
+  hongdaeCafeDemoDraft,
+  isDraftReady,
+  marketLookupToQuery,
+  restoreSession,
+  shouldRunDemoFlow,
+} from './model'
 
 describe('agent session model', () => {
   it('accepts an industry alone and treats omitted preferences as unrestricted', () => {
@@ -85,6 +99,144 @@ describe('agent session model', () => {
       rentable_area_sqm: 66,
       floor: 'f1',
     })).toBe(true)
+  })
+
+  it('provides a ready deterministic Hongdae cafe demo session', () => {
+    const session = createHongdaeCafeDemoSession()
+
+    expect(isDraftReady(hongdaeCafeDemoDraft)).toBe(true)
+    expect(session.draft.industry_code).toBe('CS100010')
+    expect(session.draft.preferred_districts).toEqual(['마포구'])
+    expect(session.draft.strategy).toBe('growth')
+    expect(session.selectedScenarioId).toBeNull()
+    expect(shouldRunDemoFlow(`?demo=${DEMO_FLOW_QUERY_VALUE}`)).toBe(true)
+    expect(shouldRunDemoFlow('?demo=other')).toBe(false)
+  })
+
+  it('keeps the deterministic market lookup parameters for follow-up questions', () => {
+    const query = marketLookupToQuery({
+      title: '최근 폐업률 기준 낮은 업종 Top 3',
+      group_by: 'industry',
+      metric: 'closing_rate',
+      metric_label: '최근 폐업률',
+      metric_unit: 'ratio',
+      order: 'asc',
+      filters: { district_name: '도봉구' },
+      data_period: '2025Q1~2025Q4',
+      distribution: { population_count: 63, mean: 0.02, mean_display: '2.0%', median: 0.018, median_display: '1.8%', standard_deviation: 0.01, standard_deviation_display: '1.0%p' },
+      rows: [
+        { rank: 1, entity_code: 'CS200007', entity_name: '치과의원', metric_value: 0.004, metric_display_value: '0.4%', difference_from_mean: -0.016, difference_from_mean_display: '-1.6%p', difference_from_median: -0.014, difference_from_median_display: '-1.4%p', standard_deviation_distance: -1.6, district_name: null, admin_dong_name: null, area_count: 10, observation_count: 10 },
+      ],
+      geographic_basis: '서울시 상권영역',
+      disclosure: '관측 상권은 집계에 포함된 고유 서울시 상권입니다.',
+    })
+
+    expect(query).toEqual({
+      group_by: 'industry',
+      metric: 'closing_rate',
+      top_n: 1,
+      order: 'asc',
+      district_name: '도봉구',
+      admin_dong_name: null,
+      industry_code: null,
+    })
+  })
+
+  it('derives the AI command stages from the existing session state', () => {
+    const initialStages = deriveAgentCommandStages(createHongdaeCafeDemoSession())
+    expect(initialStages.map((stage) => stage.status)).toEqual([
+      'complete', 'active', 'pending', 'pending', 'pending', 'pending',
+    ])
+
+    const session = createHongdaeCafeDemoSession()
+    const recommendationStages = deriveAgentCommandStages({
+      ...session,
+      scenarios: [{}] as typeof session.scenarios,
+      selectedScenarioId: 'growth',
+      items: [{}] as typeof session.items,
+      recommendationReport: {} as NonNullable<typeof session.recommendationReport>,
+      leaseCandidates: [{}] as typeof session.leaseCandidates,
+    })
+    expect(recommendationStages.map((stage) => stage.status)).toEqual([
+      'complete', 'complete', 'complete', 'complete', 'complete', 'active',
+    ])
+    expect(recommendationStages[5].detail).toContain('정책자금')
+  })
+
+  it('creates an AI briefing from deterministic recommendation evidence', () => {
+    const session = createHongdaeCafeDemoSession()
+    const briefing = createAgentBriefing({
+      ...session,
+      recommendationReport: {
+        candidate_count: 27,
+        benchmark_label: '후보 중앙값',
+        data_period: {},
+        competition_reference_period: '2025Q4',
+        rental_estimate_basis: '입력 조건 기준',
+        rental_estimate_uses_default: false,
+        benchmark: {} as NonNullable<typeof session.recommendationReport>['benchmark'],
+        areas: [{
+          area_code: 'A1',
+          area_name: '홍대입구역(홍대)',
+          rank: 1,
+          district_name: '마포구',
+          area_type: '발달상권',
+          reliability_grade: 'A',
+          base_final_score: 84,
+          budget_fit_score: 90,
+          rental_estimate: null,
+          metrics: { final_score: 86, condition_fit_score: 91 } as NonNullable<typeof session.recommendationReport>['areas'][number]['metrics'],
+          benchmark_delta: {} as NonNullable<typeof session.recommendationReport>['areas'][number]['benchmark_delta'],
+          positive_reasons: [{ factor: '주말 유동', feature: 'weekend', fit_score: 94, weight: 0.8 }],
+          negative_reasons: [],
+          warnings: [],
+        }],
+      },
+    })
+
+    expect(briefing.title).toContain('홍대입구역(홍대)')
+    expect(briefing.summary).toContain('세부 수치는 아래 보고서')
+    expect(briefing.evidence).toContain('추천 이유 · 주말 유동')
+    expect(briefing.evidence.join(' ')).not.toContain('94.0점')
+  })
+
+  it('creates a complete arbitrary lease candidate for the demo area', () => {
+    const candidate = createDemoLeaseCandidate({
+      rank: 1,
+      area_code: 'A1',
+      area_name: '홍대입구역(홍대)',
+      district_name: '마포구',
+      admin_dong_name: '서교동',
+      area_type: '골목상권',
+      industry_code: 'CS100010',
+      industry_name: '커피-음료',
+      latitude: 37.55,
+      longitude: 126.92,
+      area_size_sqm: 1000,
+      boundary: { type: 'Polygon', coordinates: [] },
+      final_score: 80,
+      base_final_score: null,
+      budget_fit_score: null,
+      budget_adjusted: false,
+      condition_fit_score: 80,
+      raw_evidence_score: null,
+      reliability_adjusted_evidence_score: null,
+      data_reliability: 1,
+      reliability_grade: 'A',
+      positive_reasons: [],
+      negative_reasons: [],
+      evidence_summary: {},
+      warnings: [],
+      rental_estimate: null,
+    })
+    const finance = createDemoLeaseFinanceState()
+
+    expect(candidate.areaCode).toBe('A1')
+    expect(candidate.managementFeeKrw).toBe(400_000)
+    expect(candidate.keyMoneyKrw).toBe(20_000_000)
+    expect(candidate.warnings[0]).toContain('데모용 임의 매물')
+    expect(finance.additionalCosts.interior_krw).toBe(40_000_000)
+    expect(finance.eligibility.is_small_business).toBe(true)
   })
 
   it('drops legacy property type and unsupported floor values during session migration', () => {

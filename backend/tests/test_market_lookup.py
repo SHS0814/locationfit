@@ -61,6 +61,37 @@ def test_ranks_closing_rate_by_industry_with_admin_dong_filter(
     assert "법정동" in result["disclosure"]
 
 
+def test_dobong_lowest_closing_rate_explains_observed_area_count(
+    service: RecommenderService,
+) -> None:
+    result = service.lookup_market_rankings(
+        group_by="industry",
+        metric="closing_rate",
+        top_n=3,
+        order="asc",
+        district_name="도봉구",
+    )
+
+    first = result["rows"][0]
+    assert first["entity_name"] == "치과의원"
+    assert first["metric_display_value"] == "0.4%"
+    assert first["area_count"] == 10
+    assert first["observation_count"] == 10
+    assert "집계에 실제 포함된 고유 서울시 상권" in result["disclosure"]
+
+    store_count = service.lookup_market_rankings(
+        group_by="industry",
+        metric="store_count",
+        top_n=1,
+        order="desc",
+        district_name="도봉구",
+        industry_code=first["entity_code"],
+    )
+    assert store_count["filters"]["industry_name"] == "치과의원"
+    assert store_count["rows"][0]["metric_display_value"] == "55개"
+    assert store_count["rows"][0]["area_count"] == 10
+
+
 def test_requires_district_for_ambiguous_admin_dong(service: RecommenderService) -> None:
     with pytest.raises(ValueError, match="여러 자치구"):
         service.lookup_market_rankings(
