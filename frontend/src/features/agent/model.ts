@@ -94,6 +94,8 @@ export interface AgentSession {
   recommendationReport: RecommendationReport | null
   activeRequest: RecommendationRequest | null
   marketLookup: MarketLookupResult | null
+  marketLookupHistory: MarketLookupResult[]
+  marketLookupIndex: number
   storeAreaCode: string | null
   storeAnalysis: AreaStoresResponse | null
   selectedStoreId: string | null
@@ -149,6 +151,8 @@ export const initialSession: AgentSession = {
   recommendationReport: null,
   activeRequest: null,
   marketLookup: null,
+  marketLookupHistory: [],
+  marketLookupIndex: -1,
   storeAreaCode: null,
   storeAnalysis: null,
   selectedStoreId: null,
@@ -384,6 +388,14 @@ export function restoreSession(raw: string | null): AgentSession {
     const restoredItems = analysisCompatible && Array.isArray(parsed.items) && parsed.items.every(hasAreaBoundary)
       ? parsed.items
       : []
+    const marketLookupHistory = Array.isArray(parsed.marketLookupHistory)
+      ? parsed.marketLookupHistory.slice(-20)
+      : parsed.marketLookup ? [parsed.marketLookup] : []
+    const restoredMarketLookup = parsed.marketLookup || marketLookupHistory[marketLookupHistory.length - 1] || null
+    const storedLookupIndex = Number(parsed.marketLookupIndex ?? marketLookupHistory.length - 1)
+    const marketLookupIndex = restoredMarketLookup && marketLookupHistory.length > 0
+      ? Math.min(Math.max(Number.isInteger(storedLookupIndex) ? storedLookupIndex : marketLookupHistory.length - 1, 0), marketLookupHistory.length - 1)
+      : -1
     return {
       schemaVersion: 8,
       history: parsed.history.slice(-20),
@@ -402,7 +414,9 @@ export function restoreSession(raw: string | null): AgentSession {
       comparison: Array.isArray(parsed.comparison) ? parsed.comparison : [],
       recommendationReport: analysisCompatible ? parsed.recommendationReport || null : null,
       activeRequest: analysisCompatible ? parsed.activeRequest || null : null,
-      marketLookup: parsed.marketLookup || null,
+      marketLookup: restoredMarketLookup,
+      marketLookupHistory,
+      marketLookupIndex,
       storeAreaCode: analysisCompatible && typeof parsed.storeAreaCode === 'string' ? parsed.storeAreaCode : null,
       storeAnalysis: analysisCompatible && parsed.storeAnalysis ? parsed.storeAnalysis : null,
       selectedStoreId: analysisCompatible && typeof parsed.selectedStoreId === 'string' ? parsed.selectedStoreId : null,

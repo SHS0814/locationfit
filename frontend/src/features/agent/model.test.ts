@@ -43,6 +43,8 @@ describe('agent session model', () => {
     expect(restored.context.discovery_question_count).toBe(0)
     expect(restored.storeRelations).toEqual(['competitor', 'complementary', 'daily_life', 'other'])
     expect(restored.leaseCandidates).toEqual([])
+    expect(restored.marketLookupHistory).toEqual([])
+    expect(restored.marketLookupIndex).toBe(-1)
     expect(restored.phase).toBe('ready_for_confirmation')
     expect(restoreSession('{broken').phase).toBe('discovering')
   })

@@ -2,16 +2,10 @@ import { useState, type FormEvent } from 'react'
 import type {
   AgentMessage,
   AgentPhase,
-  AgentAssumption,
   AreaComparison,
   DataGap,
-  FounderContext,
-  MarketLookupResult,
   MetadataResponse,
   RecommendationDraft,
-  RelaxationOption,
-  StrategyScenario,
-  TradeoffInsight,
   FloorType,
 } from '../../types/api'
 import { isDraftReady, toggleDraftValue } from './model'
@@ -21,22 +15,12 @@ interface Props {
   history: AgentMessage[]
   draft: RecommendationDraft
   phase: AgentPhase
-  context: FounderContext
-  assumptions: AgentAssumption[]
-  explorationSummary: Record<string, unknown>
-  scenarios: StrategyScenario[]
-  tradeoffs: TradeoffInsight[]
-  relaxationOptions: RelaxationOption[]
   dataGaps: DataGap[]
   selectedScenarioId: 'condition_fit' | 'growth' | 'stability' | null
   comparison: AreaComparison[]
-  marketLookup: MarketLookupResult | null
   loading: boolean
   onSend: (message: string) => void
   onConfirm: () => void
-  onSelectScenario: (id: 'condition_fit' | 'growth' | 'stability') => void
-  onApplyRelaxation: (option: RelaxationOption) => void
-  onAssumptionStatus: (id: string, status: AgentAssumption['status']) => void
   onDraftChange: (draft: RecommendationDraft) => void
   onReset: () => void
   onRunDemo: () => void
@@ -63,10 +47,8 @@ const followUpPrompts = [
 ]
 
 export function AgentPanel({
-  metadata, history, draft, phase, context, assumptions, explorationSummary, scenarios,
-  tradeoffs, relaxationOptions, dataGaps, selectedScenarioId, comparison, marketLookup, loading,
-  onSend, onConfirm, onSelectScenario, onApplyRelaxation, onAssumptionStatus, onDraftChange,
-  onReset, onRunDemo,
+  metadata, history, draft, phase, dataGaps, selectedScenarioId, comparison, loading,
+  onSend, onConfirm, onDraftChange, onReset, onRunDemo,
 }: Props) {
   const [message, setMessage] = useState('')
   const [areaUnit, setAreaUnit] = useState<'sqm' | 'pyeong'>('sqm')
@@ -175,8 +157,7 @@ export function AgentPanel({
             </div>
           </div>
 
-          <details className="condition-details">
-            <summary>시간대·상권 유형·중요도 조정</summary>
+          <div className="condition-advanced">
             <div className="condition-group">
               <span>선호 시간대 <small>미지정 시 전 시간대</small></span>
               <div className="chip-group">
@@ -209,7 +190,7 @@ export function AgentPanel({
                 </label>
               ))}
             </div>
-          </details>
+          </div>
 
           <button className="confirm-button" type="button" onClick={onConfirm} disabled={loading || !isDraftReady(draft) || !selectedScenarioId}>
             이 조건으로 분석
@@ -225,107 +206,6 @@ export function AgentPanel({
             <button key={prompt} type="button" disabled={loading} onClick={() => onSend(prompt)}>{prompt}</button>
           ))}
         </div>
-      )}
-
-      {marketLookup && (
-        <section className="lookup-card" aria-label="상권 통계 조회 결과">
-          <div className="section-title">
-            <span>바로 조회</span>
-            <small>{marketLookup.data_period}</small>
-          </div>
-          <h3>{marketLookup.title}</h3>
-          {Object.keys(marketLookup.filters).length > 0 && (
-            <p className="lookup-filters">조회 조건 · {Object.values(marketLookup.filters).filter((value, index, values) => values.indexOf(value) === index).join(' · ')}</p>
-          )}
-          <dl className="lookup-distribution">
-            <div><dt>평균</dt><dd>{marketLookup.distribution.mean_display}</dd></div>
-            <div><dt>중앙값</dt><dd>{marketLookup.distribution.median_display}</dd></div>
-            <div><dt>표준편차</dt><dd>{marketLookup.distribution.standard_deviation_display}</dd></div>
-          </dl>
-          <p className="lookup-population">필터 적용 후 전체 {marketLookup.distribution.population_count.toLocaleString('ko-KR')}개 대상 기준</p>
-          <ol>
-            {marketLookup.rows.map((row) => (
-              <li key={`${row.rank}-${row.entity_code || row.entity_name}-${row.district_name || ''}`}>
-                <b>{row.rank}</b>
-                <span>
-                  <strong>{row.entity_name}</strong>
-                  <small>{[
-                    row.district_name,
-                    row.admin_dong_name,
-                    row.area_count > 1 ? `관측 상권 ${row.area_count}곳` : null,
-                  ].filter(Boolean).join(' · ')}</small>
-                  <small>평균 대비 {row.difference_from_mean_display} · 중앙값 대비 {row.difference_from_median_display} · {formatSigma(row.standard_deviation_distance)}</small>
-                </span>
-                <em>{row.metric_display_value}</em>
-              </li>
-            ))}
-          </ol>
-          <small>{marketLookup.disclosure}</small>
-        </section>
-      )}
-
-      {(context.business_description || context.target_customer || context.operating_pattern || assumptions.length > 0) && (
-        <section className="context-card" aria-label="창업 맥락과 가정">
-          <div className="section-title"><span>창업 맥락</span><small>질문 {context.discovery_question_count}/4</small></div>
-          <dl>
-            {context.business_description && <><dt>사업</dt><dd>{context.business_description}</dd></>}
-            {context.target_customer && <><dt>고객</dt><dd>{context.target_customer}</dd></>}
-            {context.operating_pattern && <><dt>운영</dt><dd>{context.operating_pattern}</dd></>}
-            {context.location_flexibility && <><dt>지역</dt><dd>{formatContextValue(context.location_flexibility)}</dd></>}
-            {context.risk_tolerance && <><dt>위험 선호</dt><dd>{formatContextValue(context.risk_tolerance)}</dd></>}
-          </dl>
-          {assumptions.length > 0 && (
-            <div className="assumption-list">
-              <strong>확인할 가정</strong>
-              {assumptions.filter((item) => item.status !== 'rejected').map((item) => (
-                <div key={item.id} className="assumption-row">
-                  <p>{item.status === 'confirmed' ? '확인됨' : '가정'} · {item.text}</p>
-                  {item.status === 'inferred' && <span>
-                    <button type="button" onClick={() => onAssumptionStatus(item.id, 'confirmed')}>맞아요</button>
-                    <button type="button" onClick={() => onAssumptionStatus(item.id, 'rejected')}>수정할게요</button>
-                  </span>}
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {scenarios.length > 0 && (
-        <section className="scenario-section" aria-label="전략 시나리오 비교">
-          <div className="section-title">
-            <span>전략 가설</span>
-            <small>후보 {String(explorationSummary.eligible_area_count || '-')}곳 탐색</small>
-          </div>
-          <div className="scenario-list">
-            {scenarios.map((scenario) => (
-              <article key={scenario.id} className={selectedScenarioId === scenario.id ? 'scenario-card selected' : 'scenario-card'}>
-                <div><h3>{scenario.title}</h3><strong>{scenario.candidate_count}곳</strong></div>
-                <p>{scenario.description}</p>
-                <ol>
-                  {scenario.recommendations.slice(0, 3).map((item) => (
-                    <li key={item.area_code}><span>{item.area_name}</span><b>{item.final_score.toFixed(1)}</b></li>
-                  ))}
-                </ol>
-                <button type="button" disabled={loading || selectedScenarioId === scenario.id} onClick={() => onSelectScenario(scenario.id)}>
-                  {selectedScenarioId === scenario.id ? '선택됨' : '이 전략 선택'}
-                </button>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {(tradeoffs.length > 0 || relaxationOptions.length > 0) && (
-        <section className="tradeoff-card" aria-label="상충 조건과 대안">
-          <div className="section-title"><span>상충 조건과 대안</span></div>
-          {tradeoffs.map((item, index) => <p key={`${item.kind}-${index}`} className={item.severity}>• {item.message}</p>)}
-          {relaxationOptions.map((option) => (
-            <button key={option.id} type="button" disabled={loading} onClick={() => onApplyRelaxation(option)}>
-              {option.label} · 후보 {option.candidate_count_before}→{option.candidate_count_after}곳
-            </button>
-          ))}
-        </section>
       )}
 
       {comparison.length > 0 && (
@@ -353,10 +233,6 @@ function phaseLabel(phase: AgentPhase, selected: string | null): string {
   return '맥락 파악 중'
 }
 
-function formatContextValue(value: string): string {
-  return ({ fixed: '지역 고정', flexible: '인접 지역 가능', open: '서울 전체', low: '안정 우선', medium: '균형', high: '기회 우선' } as Record<string, string>)[value] || value
-}
-
 function formatNumber(value: number | null): string {
   return value == null ? '-' : Math.round(value).toLocaleString('ko-KR')
 }
@@ -367,11 +243,6 @@ function formatPercent(value: number | null): string {
 
 function formatStoreCount(value: number | null): string {
   return value == null ? '-' : `${Math.round(value).toLocaleString('ko-KR')}개`
-}
-
-function formatSigma(value: number): string {
-  const sign = value > 0 ? '+' : ''
-  return `평균에서 ${sign}${value.toFixed(2)}σ`
 }
 
 function formatStoreDensity(value: number | null): string {

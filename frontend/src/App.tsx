@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from './api/client'
 import { RecommendationMap } from './components/map/RecommendationMap'
 import { AgentPanel } from './features/agent/AgentPanel'
+import { AgentAnalysisPanels } from './features/agent/AgentAnalysisPanels'
 import { AgentCommandCenter } from './features/agent/AgentCommandCenter'
+import { MarketLookupCard } from './features/agent/MarketLookupCard'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
@@ -116,6 +118,9 @@ export default function App() {
       const activeRequest = response.recommendations.length
         ? draftToRequest(response.draft)
         : preserveAnalysis ? session.activeRequest : null
+      const marketLookupHistory = response.market_lookup
+        ? [...session.marketLookupHistory, response.market_lookup].slice(-20)
+        : session.marketLookupHistory
       const nextSession: AgentSession = {
         schemaVersion: 8,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
@@ -137,7 +142,9 @@ export default function App() {
         recommendationReport: response.recommendation_report
           || (preserveAnalysis ? session.recommendationReport : null),
         activeRequest,
-        marketLookup: response.market_lookup || null,
+        marketLookup: response.market_lookup || session.marketLookup,
+        marketLookupHistory,
+        marketLookupIndex: response.market_lookup ? marketLookupHistory.length - 1 : session.marketLookupIndex,
         storeAreaCode: preserveAnalysis && !response.recommendations.length ? session.storeAreaCode : null,
         storeAnalysis: preserveAnalysis && !response.recommendations.length ? session.storeAnalysis : null,
         selectedStoreId: preserveAnalysis && !response.recommendations.length ? session.selectedStoreId : null,
@@ -239,6 +246,8 @@ export default function App() {
         recommendationReport: confirmResponse.recommendation_report,
         activeRequest: draftToRequest(confirmResponse.draft),
         marketLookup: null,
+        marketLookupHistory: [],
+        marketLookupIndex: -1,
         storeAreaCode: null,
         storeAnalysis: null,
         selectedStoreId: null,
@@ -316,7 +325,7 @@ export default function App() {
           : current.context
       return {
         ...current, assumptions, draft, context, phase: 'discovering', scenarios: [], tradeoffs: [],
-        relaxationOptions: [], selectedScenarioId: null, items: [], comparison: [], recommendationReport: null, activeRequest: null, marketLookup: null,
+        relaxationOptions: [], selectedScenarioId: null, items: [], comparison: [], recommendationReport: null, activeRequest: null,
         storeAreaCode: null, storeAnalysis: null, selectedStoreId: null,
         storeRelations: ['competitor', 'complementary', 'daily_life', 'other'], storeSearch: '', webResearch: [],
         leaseCandidates: [], leaseFinanceById: {}, selectedLeaseCandidateId: null, financeAreaCode: null,
@@ -356,7 +365,6 @@ export default function App() {
       comparison: [],
       recommendationReport: null,
       activeRequest: null,
-      marketLookup: null,
       storeAreaCode: null,
       storeAnalysis: null,
       selectedStoreId: null,
@@ -392,6 +400,17 @@ export default function App() {
     setStoreError(null)
     setLeaseEditorAreaCode(null)
     setEditingLeaseCandidateId(null)
+  }
+
+  const showMarketLookup = (index: number) => {
+    setSession((current) => {
+      if (index < 0 || index >= current.marketLookupHistory.length) return current
+      return {
+        ...current,
+        marketLookup: current.marketLookupHistory[index],
+        marketLookupIndex: index,
+      }
+    })
   }
 
   const openStoreExplorer = async (item: RecommendationItem) => {
@@ -512,50 +531,49 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#top"><span>KB</span> 상권 나침반</a>
-        <div className="data-badge"><i /> 데이터 {metadata.data_period.profile || '2025Q4'} · {metadata.artifact_version}</div>
-      </header>
+      <AgentCommandCenter session={session} loading={loading} />
       <main id="top">
-        <section className="hero">
-          <div>
-            <span className="hero-kicker">SEOUL COMMERCIAL AREA RECOMMENDER</span>
-            <h1>감이 아닌 데이터로,<br /><em>내 가게의 자리</em>를 찾다</h1>
-            <p>서울 1,650개 상권의 유동인구와 경쟁 환경, 과거 업종 성과를 분석합니다.</p>
-          </div>
-          <div className="hero-stat"><strong>1,650</strong><span>분석 상권</span><strong>63</strong><span>지원 업종</span></div>
-        </section>
-
         <section className="workspace">
           <AgentPanel
             metadata={metadata}
             history={session.history}
             draft={session.draft}
             phase={session.phase}
-            context={session.context}
-            assumptions={session.assumptions}
-            explorationSummary={session.explorationSummary}
-            scenarios={session.scenarios}
-            tradeoffs={session.tradeoffs}
-            relaxationOptions={session.relaxationOptions}
             dataGaps={session.dataGaps}
             selectedScenarioId={session.selectedScenarioId}
             comparison={session.comparison}
-            marketLookup={session.marketLookup}
             loading={loading}
             onSend={sendMessage}
             onConfirm={confirm}
-            onSelectScenario={selectScenario}
-            onApplyRelaxation={applyRelaxation}
-            onAssumptionStatus={updateAssumption}
             onDraftChange={editDraft}
             onReset={resetConversationAndAnalysis}
             onRunDemo={runHongdaeCafeDemo}
           />
           <div className="output-area">
-            <AgentCommandCenter session={session} loading={loading} />
             {error && <div className="error-banner" role="alert">{error} {lastTurn && <button type="button" onClick={() => executeTurn(lastTurn, false)}>다시 시도</button>}</div>}
             {storeError && <div className="error-banner" role="alert">{storeError}</div>}
+            <AgentAnalysisPanels
+              context={session.context}
+              assumptions={session.assumptions}
+              explorationSummary={session.explorationSummary}
+              scenarios={session.scenarios}
+              tradeoffs={session.tradeoffs}
+              relaxationOptions={session.relaxationOptions}
+              selectedScenarioId={session.selectedScenarioId}
+              loading={loading}
+              onSelectScenario={selectScenario}
+              onApplyRelaxation={applyRelaxation}
+              onAssumptionStatus={updateAssumption}
+            />
+            {session.marketLookup && (
+              <MarketLookupCard
+                result={session.marketLookup}
+                position={session.marketLookupIndex}
+                total={session.marketLookupHistory.length}
+                onPrevious={() => showMarketLookup(session.marketLookupIndex - 1)}
+                onNext={() => showMarketLookup(session.marketLookupIndex + 1)}
+              />
+            )}
             {activeFinanceArea ? (
               <LeaseCandidateWorkspace
                 area={activeFinanceArea}

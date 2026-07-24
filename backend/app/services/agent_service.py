@@ -356,12 +356,16 @@ class LocationAgentService:
                 draft, payload.context, payload.assumptions,
             )
             exploration, scenarios, tradeoffs, relaxations = self._explore(draft)
+            recommendations, diagnostics, report = self.recommender.recommend_with_report(
+                draft.to_request()
+            )
             return self._response(
                 assistant_message=(
                     f"AI가 {self._strategy_label(payload.scenario_id)}을 주 전략으로 설정했습니다. "
-                    "추천 분석 도구에 전달할 조건과 가정을 확인한 뒤 실행해주세요."
+                    "선택한 전략으로 추천 분석 도구를 바로 실행했습니다. "
+                    + self._recommendation_summary(report)
                 ),
-                phase="ready_for_confirmation",
+                phase="results",
                 draft=draft,
                 context=context,
                 assumptions=assumptions,
@@ -371,8 +375,12 @@ class LocationAgentService:
                 scenarios=scenarios,
                 tradeoffs=tradeoffs,
                 relaxation_options=relaxations,
+                recommendations=recommendations,
+                diagnostics=diagnostics,
+                recommendation_report=report,
                 selected_scenario_id=payload.scenario_id,
                 analysis_revision=payload.analysis_revision,
+                active_recommendation_request=draft.to_request(),
             )
 
         try:

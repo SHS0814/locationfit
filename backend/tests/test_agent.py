@@ -255,7 +255,7 @@ def test_agent_api_contract_with_injected_runner() -> None:
         assert confirm_body["recommendation_report"]["areas"][0]["metrics"]["same_industry_store_density"] is not None
 
 
-def test_select_scenario_requires_confirmation_before_final_result() -> None:
+def test_select_scenario_runs_recommendation_immediately() -> None:
     service = LocationAgentService(
         RecommenderService(ARTIFACT_DIR), ReadyRunner(), timeout_seconds=1,
     )
@@ -271,11 +271,12 @@ def test_select_scenario_requires_confirmation_before_final_result() -> None:
         analysis_revision=1,
     )))
 
-    assert result["phase"] == "ready_for_confirmation"
+    assert result["phase"] == "results"
     assert result["draft"].strategy == "stability"
-    assert result["recommendations"] == []
+    assert len(result["recommendations"]) == 3
+    assert len(result["recommendation_report"]["areas"]) == 3
     assert result["assistant_message"].startswith("AI가 안정성 우선형을 주 전략으로 설정")
-    assert "추천 분석 도구" in result["assistant_message"]
+    assert "추천 분석 도구를 바로 실행" in result["assistant_message"]
     assert "안정성 우선형" in result["confirmation_summary"]
 
 
