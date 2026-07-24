@@ -190,6 +190,14 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
 .tradeoff-card > p.warning { color: #986215; }
 .tradeoff-card button { width: 100%; margin-top: 7px; text-align: left; }
 .data-gap { padding: 7px 8px; background: #fff7e8; color: #8b641d !important; }
+.condition-drawer { border-bottom: 1px solid #e6e3db; background: #fff; }
+.condition-drawer > summary { display: flex; align-items: center; justify-content: space-between; min-height: 46px; padding: 0 18px; color: #4a4944; font-size: 11px; font-weight: 800; list-style: none; cursor: pointer; }
+.condition-drawer > summary::-webkit-details-marker { display: none; }
+.condition-drawer > summary::after { width: 7px; height: 7px; margin-right: 3px; border-right: 2px solid #77736b; border-bottom: 2px solid #77736b; content: ''; transform: rotate(45deg); transition: transform .18s ease; }
+.condition-drawer > summary:hover { background: #faf9f5; color: #252521; }
+.condition-drawer > summary:focus-visible { outline: 3px solid rgba(255, 204, 0, .55); outline-offset: -3px; }
+.condition-drawer[open] > summary { border-bottom: 1px solid #eceae4; background: #faf9f5; }
+.condition-drawer[open] > summary::after { transform: rotate(225deg); }
 .condition-card { padding: 20px 22px 24px; }
 .condition-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .condition-heading > div { display: flex; align-items: center; gap: 7px; }

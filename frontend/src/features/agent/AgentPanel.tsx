@@ -123,6 +123,102 @@ export function AgentPanel({
         <button type="submit" disabled={loading || !message.trim()}>보내기</button>
       </form>
 
+      <details className="condition-drawer">
+        <summary>추천 조건 수정</summary>
+        <section className="condition-card" aria-label="추천 조건 카드">
+          <div className="condition-heading">
+            <div><span>추천 조건</span><strong>{phaseLabel(phase, selectedScenarioId)}</strong></div>
+            <select value={draft.top_n} onChange={(event) => update('top_n', Number(event.target.value))} aria-label="추천 결과 개수">
+              {[3, 5, 10, 15, 20].map((count) => <option key={count} value={count}>{count}곳</option>)}
+            </select>
+          </div>
+
+          <label>
+            <span>업종</span>
+            <select value={draft.industry_code || ''} onChange={(event) => update('industry_code', event.target.value || null)}>
+              <option value="">대화로 업종을 알려주세요</option>
+              {metadata.industries.map((option) => <option key={option.code} value={option.code}>{option.name}</option>)}
+            </select>
+          </label>
+
+          <div className="budget-rent-card">
+            <div className="section-title"><span>예산·예상 임대료</span><small>선택 입력</small></div>
+            <div className="money-input-grid">
+              <label><span>총 창업예산</span><div><input type="number" min="1" value={toManwon(draft.total_startup_budget_krw)} onChange={(event) => update('total_startup_budget_krw', fromManwon(event.target.value))} placeholder="예: 15000" /><small>만원</small></div></label>
+              <label><span>월 환산임대료 한도</span><div><input type="number" min="1" value={toManwon(draft.monthly_converted_rent_limit_krw)} onChange={(event) => update('monthly_converted_rent_limit_krw', fromManwon(event.target.value))} placeholder="예: 500" /><small>만원</small></div></label>
+            </div>
+            {(draft.monthly_converted_rent_limit_krw != null || draft.rentable_area_sqm != null) && (
+              <div className="rent-condition-grid">
+                <label><span>임대면적(전용+공용)</span><div className="area-input"><input type="number" min="0.1" step="0.1" value={formatAreaInput(draft.rentable_area_sqm, areaUnit)} onChange={(event) => update('rentable_area_sqm', parseAreaInput(event.target.value, areaUnit))} /><button type="button" onClick={() => setAreaUnit(areaUnit === 'sqm' ? 'pyeong' : 'sqm')}>{areaUnit === 'sqm' ? '㎡' : '평'}</button></div></label>
+                <label><span>층 구분</span><select value={draft.floor || ''} onChange={(event) => update('floor', (event.target.value || null) as FloorType | null)}><option value="">선택</option>{metadata.rent_floors.map((floor) => <option key={floor.code} value={floor.code}>{floor.name}</option>)}</select></label>
+              </div>
+            )}
+            <small>월 한도와 임대조건을 모두 입력한 경우에만 예산 적합도 20%를 반영합니다. 총 창업예산만 입력하면 순위는 바뀌지 않습니다.</small>
+          </div>
+          <label>
+            <span>선호 자치구</span>
+            <select value={draft.preferred_districts[0] || ''} onChange={(event) => update('preferred_districts', event.target.value ? [event.target.value] : [])}>
+              <option value="">서울 전체</option>
+              {metadata.districts.map((district) => <option key={district}>{district}</option>)}
+            </select>
+          </label>
+
+          <div className="condition-group">
+            <span>주요 고객 연령 <small>미지정 시 전 연령</small></span>
+            <div className="chip-group">
+              {metadata.age_groups.map((option) => (
+                <button key={option.code} type="button" className={draft.target_age_groups.includes(option.code) ? 'chip active' : 'chip'}
+                  onClick={() => update('target_age_groups', toggleDraftValue(draft.target_age_groups, option.code))}>
+                  {option.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <details className="condition-details">
+            <summary>시간대·상권 유형·중요도 조정</summary>
+            <div className="condition-group">
+              <span>선호 시간대 <small>미지정 시 전 시간대</small></span>
+              <div className="chip-group">
+                {metadata.time_bands.map((option) => (
+                  <button key={option.code} type="button" className={draft.preferred_time_bands.includes(option.code) ? 'chip active' : 'chip'}
+                    onClick={() => update('preferred_time_bands', toggleDraftValue(draft.preferred_time_bands, option.code))}>
+                    {option.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="condition-group">
+              <span>상권 유형 <small>미지정 시 전체 유형</small></span>
+              <div className="chip-group">
+                {metadata.area_types.map((option) => (
+                  <button key={option.code} type="button" className={draft.preferred_area_types.includes(option.code) ? 'chip active' : 'chip'}
+                    onClick={() => update('preferred_area_types', toggleDraftValue(draft.preferred_area_types, option.code))}>
+                    {option.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="slider-list">
+              {importanceFields.map(({ key, label }) => (
+                <label className="slider-row" key={key}>
+                  <span>{label}</span>
+                  <input type="range" min="0" max="1" step="0.1" value={Number(draft[key])}
+                    onChange={(event) => update(key, Number(event.target.value) as never)} />
+                  <strong>{Number(draft[key]).toFixed(1)}</strong>
+                </label>
+              ))}
+            </div>
+          </details>
+
+          <button className="confirm-button" type="button" onClick={onConfirm} disabled={loading || !isDraftReady(draft) || !selectedScenarioId}>
+            이 조건으로 분석
+          </button>
+          {dataGaps.map((gap) => <small className="data-gap" key={gap.code}>{gap.message}</small>)}
+          <small>아파트 시세는 주거 구매력 참고치이며 상가 임대료·보증금으로 해석하지 않습니다.</small>
+        </section>
+      </details>
+
       {phase === 'results' && (
         <div className="follow-up-prompts" aria-label="추천 결과 후속 질문">
           {followUpPrompts.map((prompt) => (
@@ -231,99 +327,6 @@ export function AgentPanel({
           ))}
         </section>
       )}
-
-      <section className="condition-card" aria-label="추천 조건 카드">
-        <div className="condition-heading">
-          <div><span>추천 조건</span><strong>{phaseLabel(phase, selectedScenarioId)}</strong></div>
-          <select value={draft.top_n} onChange={(event) => update('top_n', Number(event.target.value))} aria-label="추천 결과 개수">
-            {[3, 5, 10, 15, 20].map((count) => <option key={count} value={count}>{count}곳</option>)}
-          </select>
-        </div>
-
-        <label>
-          <span>업종</span>
-          <select value={draft.industry_code || ''} onChange={(event) => update('industry_code', event.target.value || null)}>
-            <option value="">대화로 업종을 알려주세요</option>
-            {metadata.industries.map((option) => <option key={option.code} value={option.code}>{option.name}</option>)}
-          </select>
-        </label>
-
-        <div className="budget-rent-card">
-          <div className="section-title"><span>예산·예상 임대료</span><small>선택 입력</small></div>
-          <div className="money-input-grid">
-            <label><span>총 창업예산</span><div><input type="number" min="1" value={toManwon(draft.total_startup_budget_krw)} onChange={(event) => update('total_startup_budget_krw', fromManwon(event.target.value))} placeholder="예: 15000" /><small>만원</small></div></label>
-            <label><span>월 환산임대료 한도</span><div><input type="number" min="1" value={toManwon(draft.monthly_converted_rent_limit_krw)} onChange={(event) => update('monthly_converted_rent_limit_krw', fromManwon(event.target.value))} placeholder="예: 500" /><small>만원</small></div></label>
-          </div>
-          {(draft.monthly_converted_rent_limit_krw != null || draft.rentable_area_sqm != null) && (
-            <div className="rent-condition-grid">
-              <label><span>임대면적(전용+공용)</span><div className="area-input"><input type="number" min="0.1" step="0.1" value={formatAreaInput(draft.rentable_area_sqm, areaUnit)} onChange={(event) => update('rentable_area_sqm', parseAreaInput(event.target.value, areaUnit))} /><button type="button" onClick={() => setAreaUnit(areaUnit === 'sqm' ? 'pyeong' : 'sqm')}>{areaUnit === 'sqm' ? '㎡' : '평'}</button></div></label>
-              <label><span>층 구분</span><select value={draft.floor || ''} onChange={(event) => update('floor', (event.target.value || null) as FloorType | null)}><option value="">선택</option>{metadata.rent_floors.map((floor) => <option key={floor.code} value={floor.code}>{floor.name}</option>)}</select></label>
-            </div>
-          )}
-          <small>월 한도와 임대조건을 모두 입력한 경우에만 예산 적합도 20%를 반영합니다. 총 창업예산만 입력하면 순위는 바뀌지 않습니다.</small>
-        </div>
-        <label>
-          <span>선호 자치구</span>
-          <select value={draft.preferred_districts[0] || ''} onChange={(event) => update('preferred_districts', event.target.value ? [event.target.value] : [])}>
-            <option value="">서울 전체</option>
-            {metadata.districts.map((district) => <option key={district}>{district}</option>)}
-          </select>
-        </label>
-
-        <div className="condition-group">
-          <span>주요 고객 연령 <small>미지정 시 전 연령</small></span>
-          <div className="chip-group">
-            {metadata.age_groups.map((option) => (
-              <button key={option.code} type="button" className={draft.target_age_groups.includes(option.code) ? 'chip active' : 'chip'}
-                onClick={() => update('target_age_groups', toggleDraftValue(draft.target_age_groups, option.code))}>
-                {option.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <details className="condition-details">
-          <summary>시간대·상권 유형·중요도 조정</summary>
-          <div className="condition-group">
-            <span>선호 시간대 <small>미지정 시 전 시간대</small></span>
-            <div className="chip-group">
-              {metadata.time_bands.map((option) => (
-                <button key={option.code} type="button" className={draft.preferred_time_bands.includes(option.code) ? 'chip active' : 'chip'}
-                  onClick={() => update('preferred_time_bands', toggleDraftValue(draft.preferred_time_bands, option.code))}>
-                  {option.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="condition-group">
-            <span>상권 유형 <small>미지정 시 전체 유형</small></span>
-            <div className="chip-group">
-              {metadata.area_types.map((option) => (
-                <button key={option.code} type="button" className={draft.preferred_area_types.includes(option.code) ? 'chip active' : 'chip'}
-                  onClick={() => update('preferred_area_types', toggleDraftValue(draft.preferred_area_types, option.code))}>
-                  {option.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="slider-list">
-            {importanceFields.map(({ key, label }) => (
-              <label className="slider-row" key={key}>
-                <span>{label}</span>
-                <input type="range" min="0" max="1" step="0.1" value={Number(draft[key])}
-                  onChange={(event) => update(key, Number(event.target.value) as never)} />
-                <strong>{Number(draft[key]).toFixed(1)}</strong>
-              </label>
-            ))}
-          </div>
-        </details>
-
-        <button className="confirm-button" type="button" onClick={onConfirm} disabled={loading || !isDraftReady(draft) || !selectedScenarioId}>
-          이 조건으로 분석
-        </button>
-        {dataGaps.map((gap) => <small className="data-gap" key={gap.code}>{gap.message}</small>)}
-        <small>아파트 시세는 주거 구매력 참고치이며 상가 임대료·보증금으로 해석하지 않습니다.</small>
-      </section>
 
       {comparison.length > 0 && (
         <section className="comparison-card" aria-label="상권 비교 지표">
