@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from backend.app.schemas.finance import (
     ConfirmedLeaseCandidate,
@@ -12,6 +13,11 @@ from backend.app.schemas.finance import (
 )
 from backend.app.services.finance_service import FinancePlanService, calculate_funding
 from backend.app.services.listing_service import LeaseCandidateService, _validate_public_url
+from backend.app.financial_catalog.loader import load_curated_catalog
+
+
+CATALOG_ROOT = Path(__file__).resolve().parents[2] / "config/financial_catalog"
+CATALOG = load_curated_catalog(CATALOG_ROOT)
 
 
 def request_for(*, vulnerability: str = "unknown", months: int | None = None) -> FinancePlanRequest:
@@ -51,15 +57,46 @@ def test_funding_calculation_separates_deposit_and_first_year_costs() -> None:
 
 
 def test_policy_matching_is_deterministic_and_does_not_promise_approval() -> None:
-    result = FinancePlanService().create_plan(request_for(vulnerability="low_credit", months=6))
-    assert [item["status"] for item in result["policy_candidates"]] == ["needs_review", "basic_fit"]
-    assert result["policy_candidates"][1]["name"] == "미소금융 운영자금"
+    result = FinancePlanService().create_plan(
+        request_for(vulnerability="low_credit", months=6), CATALOG
+    )
+    candidates = result["policy_candidates"]
+    assert len(candidates) == 33
+    general = next(item for item in candidates if item["program_id"] == "semas-2026-general-management-stability")
+    biz_card = next(item for item in candidates if item["program_id"] == "koreg-2026-biz-plus-card")
+    assert general["status"] == "basic_fit"
+    assert biz_card["status"] == "needs_review"
+    assert biz_card["benefits"][0]["amount_max_krw"] == 10_000_000
     assert "심사" in result["disclosure"]
 
 
 def test_operating_fund_requires_three_months() -> None:
-    result = FinancePlanService().create_plan(request_for(vulnerability="low_credit", months=2))
-    assert result["policy_candidates"][1]["status"] == "not_eligible"
+    result = FinancePlanService().create_plan(
+        request_for(vulnerability="low_credit", months=2), CATALOG
+    )
+    biz_card = next(
+        item for item in result["policy_candidates"]
+        if item["program_id"] == "koreg-2026-biz-plus-card"
+    )
+    assert biz_card["status"] == "not_eligible"
+
+
+def test_policy_excluded_industry_only_rejects_policy_funds() -> None:
+    request = request_for(months=12)
+    request.eligibility.has_policy_excluded_industry = True
+    result = FinancePlanService().create_plan(request, CATALOG)
+    policy_funds = [
+        item for item in result["policy_candidates"]
+        if item["product_type"] == "policy_fund"
+    ]
+    bank_loan = next(
+        item for item in result["policy_candidates"]
+        if item["program_id"] == "kb-small-business-credit-loan"
+    )
+
+    assert policy_funds
+    assert all(item["status"] == "not_eligible" for item in policy_funds)
+    assert bank_loan["status"] == "basic_fit"
 
 
 class FakeRunner:
@@ -97,4 +134,3 @@ def test_private_and_loopback_listing_urls_are_rejected() -> None:
             assert "공개 인터넷 주소" in str(exc)
         else:
             raise AssertionError("private listing URL must be rejected")
-

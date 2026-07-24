@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api } from '../../api/client'
-import type { FinancePlanRequest, FinancialVulnerability, RecommendationItem } from '../../types/api'
+import type { CatalogBenefit, FinancePlanRequest, FinancialVulnerability, RecommendationItem } from '../../types/api'
 import {
   buildFinancePlanRequest,
   candidateMissingCosts,
@@ -23,6 +23,29 @@ const startupFields: Array<{ key: StartupMoneyField; label: string }> = [
 
 const statusLabel = {
   basic_fit: '기본조건 부합', needs_review: '추가 확인 필요', not_eligible: '입력조건상 비대상',
+}
+
+const productTypeLabel = {
+  bank_loan: 'KB 은행대출', policy_fund: '정책자금', support_program: '지원사업', guarantee: '보증상품',
+}
+
+const catalogStatusLabel = {
+  active: '현재 안내 중', upcoming: '접수 예정', unknown: '접수상태 확인 필요',
+}
+
+function benefitText(benefit: CatalogBenefit): string {
+  const terms: string[] = []
+  if (benefit.amount_max_krw != null) terms.push(`최대 ${formatKrw(benefit.amount_max_krw)}`)
+  if (benefit.interest_rate_min_pct != null || benefit.interest_rate_max_pct != null) {
+    const minimum = benefit.interest_rate_min_pct == null ? '' : `${benefit.interest_rate_min_pct}%`
+    const maximum = benefit.interest_rate_max_pct == null ? '' : `${benefit.interest_rate_max_pct}%`
+    terms.push(`금리 ${minimum && maximum ? `${minimum}~${maximum}` : minimum || maximum}`)
+  }
+  if (benefit.guarantee_rate_pct != null) terms.push(`보증비율 ${benefit.guarantee_rate_pct}%`)
+  if (benefit.interest_subsidy_rate_pct != null) terms.push(`이차보전 ${benefit.interest_subsidy_rate_pct}%p`)
+  if (benefit.guarantee_fee_rate_pct != null) terms.push(`보증료율 ${benefit.guarantee_fee_rate_pct}%`)
+  if (benefit.term_max_months != null) terms.push(`최대 ${benefit.term_max_months}개월`)
+  return terms.join(' · ') || benefit.original_text || '세부 혜택은 공식 원문에서 확인해야 합니다.'
 }
 
 function startupValue(state: LeaseCandidateFinanceState, key: StartupMoneyField): number {
@@ -126,7 +149,24 @@ export function LeaseCandidateWorkspace({
           </div><button className="finance-primary" type="button" onClick={createPlan} disabled={planning}>{planning ? '자금계획 계산 중…' : '자금계획·정책지원 후보 보기'}</button>{error && <div className="finance-error" role="alert">{error}</div>}</div>
         </>}
 
-        {state.plan && <div className="finance-result"><div className="funding-summary"><div><span>첫해 총 필요자금</span><strong>{formatKrw(state.plan.funding.total_first_year_cash_need_krw)}</strong></div><div><span>내 자기자금</span><strong>{formatKrw(state.plan.funding.own_capital_krw)}</strong></div><div className={state.plan.funding.funding_gap_krw > 0 ? 'gap' : ''}><span>부족자금</span><strong>{formatKrw(state.plan.funding.funding_gap_krw)}</strong></div></div><dl className="funding-breakdown"><div><dt>반환 가능 보증금</dt><dd>{formatKrw(state.plan.funding.refundable_deposit_krw)}</dd></div><div><dt>권리금</dt><dd>{formatKrw(state.plan.funding.one_time_nonrefundable_krw)}</dd></div><div><dt>12개월 월세·관리비</dt><dd>{formatKrw(state.plan.funding.annual_occupancy_cost_krw)}</dd></div><div><dt>추가 창업비</dt><dd>{formatKrw(state.plan.funding.additional_startup_cost_krw)}</dd></div></dl><h3>정책지원 1차 후보</h3><div className="policy-list">{state.plan.policy_candidates.map((candidate) => <article key={candidate.program_id} className={`policy-card ${candidate.status}`}><div><span>{candidate.provider}</span><b>{statusLabel[candidate.status]}</b></div><h4>{candidate.name}</h4><p>{candidate.reasons.join(' ')}</p>{candidate.checks_required.length > 0 && <ul>{candidate.checks_required.map((check) => <li key={check}>{check}</li>)}</ul>}<a href={candidate.source_url} target="_blank" rel="noreferrer">공식 원문 확인 · {candidate.source_checked_at}</a></article>)}</div><small className="finance-final-disclosure">{state.plan.disclosure}</small></div>}
+        {state.plan && <div className="finance-result">
+          <div className="funding-summary"><div><span>첫해 총 필요자금</span><strong>{formatKrw(state.plan.funding.total_first_year_cash_need_krw)}</strong></div><div><span>내 자기자금</span><strong>{formatKrw(state.plan.funding.own_capital_krw)}</strong></div><div className={state.plan.funding.funding_gap_krw > 0 ? 'gap' : ''}><span>부족자금</span><strong>{formatKrw(state.plan.funding.funding_gap_krw)}</strong></div></div>
+          <dl className="funding-breakdown"><div><dt>반환 가능 보증금</dt><dd>{formatKrw(state.plan.funding.refundable_deposit_krw)}</dd></div><div><dt>권리금</dt><dd>{formatKrw(state.plan.funding.one_time_nonrefundable_krw)}</dd></div><div><dt>12개월 월세·관리비</dt><dd>{formatKrw(state.plan.funding.annual_occupancy_cost_krw)}</dd></div><div><dt>추가 창업비</dt><dd>{formatKrw(state.plan.funding.additional_startup_cost_krw)}</dd></div></dl>
+          <h3>금융지원 상품 1차 후보</h3>
+          <p className="catalog-result-summary">
+            DB 카탈로그 {state.plan.policy_candidates.length}개 · 기본조건 부합 {state.plan.policy_candidates.filter((item) => item.status === 'basic_fit').length}개 · 추가 확인 {state.plan.policy_candidates.filter((item) => item.status === 'needs_review').length}개
+          </p>
+          <div className="policy-list">{state.plan.policy_candidates.map((candidate) => <article key={candidate.program_id} className={`policy-card ${candidate.status}`}>
+            <div className="policy-card-header"><span>{productTypeLabel[candidate.product_type]} · {candidate.provider}</span><b>{statusLabel[candidate.status]}</b></div>
+            <h4>{candidate.name}</h4>
+            {candidate.summary && <p className="policy-summary">{candidate.summary}</p>}
+            <p>{candidate.reasons.join(' ')}</p>
+            {candidate.benefits.length > 0 && <ul className="policy-benefits">{candidate.benefits.map((benefit, index) => <li key={`${candidate.program_id}-benefit-${index}`}>{benefitText(benefit)}</li>)}</ul>}
+            {candidate.checks_required.length > 0 && <details><summary>추가 확인사항 {candidate.checks_required.length}개</summary><ul>{candidate.checks_required.map((check) => <li key={check}>{check}</li>)}</ul></details>}
+            <div className="policy-card-footer"><span>{catalogStatusLabel[candidate.catalog_status]}{candidate.application_end_date ? ` · ${candidate.application_end_date} 마감` : ''}</span><a href={candidate.application_url || candidate.source_url} target="_blank" rel="noreferrer">공식 원문 · {candidate.source_checked_at}</a></div>
+          </article>)}</div>
+          <small className="finance-final-disclosure">{state.plan.disclosure}</small>
+        </div>}
       </section>}
     </section>
   )

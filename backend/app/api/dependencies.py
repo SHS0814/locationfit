@@ -1,5 +1,10 @@
 from fastapi import Request
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
+from backend.app.db.session import get_db_session
+from backend.app.financial_catalog.contracts import CatalogBundle
+from backend.app.financial_catalog.persistence import bundle_from_database
 from backend.app.services.agent_service import LocationAgentService
 from backend.app.services.recommender_service import RecommenderService
 from backend.app.services.store_service import CommercialStoreService
@@ -54,3 +59,9 @@ def get_finance_plan_service(request: Request) -> FinancePlanService:
         detail = getattr(request.app.state, "startup_error", "금융계획 서비스가 준비되지 않았습니다.")
         raise RuntimeError(detail)
     return service
+
+
+def get_financial_catalog(
+    session: Session = Depends(get_db_session),
+) -> CatalogBundle:
+    return bundle_from_database(session)

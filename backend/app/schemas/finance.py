@@ -106,12 +106,33 @@ class PolicyCandidate(BaseModel):
     program_id: str
     name: str
     provider: str
+    product_type: Literal["bank_loan", "policy_fund", "support_program", "guarantee"]
+    catalog_status: Literal["active", "upcoming", "unknown"]
+    summary: str | None
     status: Literal["basic_fit", "needs_review", "not_eligible"]
     reasons: list[str]
     checks_required: list[str]
+    benefits: list["CatalogBenefit"]
+    application_url: HttpUrl | None
+    application_end_date: str | None
     source_title: str
     source_url: HttpUrl
     source_checked_at: str
+
+
+class CatalogBenefit(BaseModel):
+    benefit_type: Literal["loan", "guarantee", "interest_subsidy", "grant", "other"]
+    amount_min_krw: Money | None
+    amount_max_krw: Money | None
+    interest_rate_min_pct: float | None
+    interest_rate_max_pct: float | None
+    guarantee_rate_pct: float | None
+    interest_subsidy_rate_pct: float | None
+    guarantee_fee_rate_pct: float | None
+    term_min_months: int | None
+    term_max_months: int | None
+    grace_period_months: int | None
+    original_text: str | None
 
 
 class FinancePlanResponse(BaseModel):

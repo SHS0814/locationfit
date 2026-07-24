@@ -242,6 +242,23 @@ export interface LeaseCandidateExtractResponse {
 }
 
 export type FinancialVulnerability = 'low_credit' | 'basic_livelihood' | 'near_poverty' | 'earned_income_tax_credit' | 'none' | 'unknown'
+export type FinancialProductType = 'bank_loan' | 'policy_fund' | 'support_program' | 'guarantee'
+export type FinancialCatalogStatus = 'active' | 'upcoming' | 'unknown'
+
+export interface CatalogBenefit {
+  benefit_type: 'loan' | 'guarantee' | 'interest_subsidy' | 'grant' | 'other'
+  amount_min_krw: number | null
+  amount_max_krw: number | null
+  interest_rate_min_pct: number | null
+  interest_rate_max_pct: number | null
+  guarantee_rate_pct: number | null
+  interest_subsidy_rate_pct: number | null
+  guarantee_fee_rate_pct: number | null
+  term_min_months: number | null
+  term_max_months: number | null
+  grace_period_months: number | null
+  original_text: string | null
+}
 
 export interface FinancePlanRequest {
   candidate: {
@@ -288,9 +305,15 @@ export interface FinancePlanResponse {
     program_id: string
     name: string
     provider: string
+    product_type: FinancialProductType
+    catalog_status: FinancialCatalogStatus
+    summary: string | null
     status: 'basic_fit' | 'needs_review' | 'not_eligible'
     reasons: string[]
     checks_required: string[]
+    benefits: CatalogBenefit[]
+    application_url: string | null
+    application_end_date: string | null
     source_title: string
     source_url: string
     source_checked_at: string
