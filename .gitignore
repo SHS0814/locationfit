@@ -13,6 +13,7 @@ Thumbs.db
 !.env.example
 !**/.env.example
 !.env.docker.example
+!.env.postgres.example
 .envrc
 .direnv/
 *.pem

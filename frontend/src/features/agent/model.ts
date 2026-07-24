@@ -384,6 +384,23 @@ export function hasAreaBoundary(item: unknown): item is RecommendationItem {
   )
 }
 
+function restoreLeaseFinanceStates(value: unknown): Record<string, LeaseCandidateFinanceState> {
+  if (!value || typeof value !== 'object') return {}
+  return Object.fromEntries(Object.entries(value).map(([key, rawState]) => {
+    const state = rawState as LeaseCandidateFinanceState
+    const candidates = state.plan?.policy_candidates
+    const compatiblePlan = state.plan == null || (
+      Array.isArray(candidates)
+      && candidates.every((candidate) => (
+        typeof candidate.product_type === 'string'
+        && typeof candidate.catalog_status === 'string'
+        && Array.isArray(candidate.benefits)
+      ))
+    )
+    return [key, compatiblePlan ? state : { ...state, plan: null }]
+  }))
+}
+
 export function restoreSession(raw: string | null): AgentSession {
   if (!raw) return initialSession
   try {
@@ -438,8 +455,7 @@ export function restoreSession(raw: string | null): AgentSession {
       storeSearch: analysisCompatible && typeof parsed.storeSearch === 'string' ? parsed.storeSearch : '',
       webResearch: analysisCompatible && Array.isArray(parsed.webResearch) ? parsed.webResearch : [],
       leaseCandidates: currentSchema && Array.isArray(parsed.leaseCandidates) ? parsed.leaseCandidates : [],
-      leaseFinanceById: currentSchema && parsed.leaseFinanceById && typeof parsed.leaseFinanceById === 'object'
-        ? parsed.leaseFinanceById : {},
+      leaseFinanceById: currentSchema ? restoreLeaseFinanceStates(parsed.leaseFinanceById) : {},
       selectedLeaseCandidateId: currentSchema && typeof parsed.selectedLeaseCandidateId === 'string'
         ? parsed.selectedLeaseCandidateId : null,
       financeAreaCode: currentSchema && typeof parsed.financeAreaCode === 'string' ? parsed.financeAreaCode : null,

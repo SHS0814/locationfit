@@ -1,0 +1,306 @@
+catalog_version: 1
+products:
+  - slug: seoul-2026-facility-fund
+    name: 2026 서울시 시설자금
+    product_type: policy_fund
+    status: active
+    summary: 서울 소재 중소기업·소상공인의 시설 투자를 지원하는 직접융자금입니다.
+    application_url: &seoul_url https://news.seoul.go.kr/economy/rearing-funds
+    last_checked_at: &checked 2026-07-24T00:00:00+09:00
+    extra_data: &direct_extra
+      funding_purposes: [facilities]
+      rate_basis: fixed
+      application_channels: [서울신용보증재단 방문상담, 서울신용보증재단 비대면상담]
+      closing_condition: 예산 소진시까지
+      category: 서울시 직접융자금
+      eligibility_notes: 서울시 융자제한업종과 시설자금별 세부대상을 확인해야 합니다.
+      curation_level: official_overview
+    organization_roles: &seoul_roles
+      - organization_code: seoul
+        role: authority
+      - organization_code: seoul-credit
+        role: operator
+    benefits:
+      - &seoul_loan
+        benefit_type: loan
+        original_text: 세부 한도·금리·기간은 서울시 2026년 공고문과 별표를 확인해야 합니다.
+    eligibility_groups:
+      - &seoul_common
+        name: 서울 소재 소상공인
+        description: 융자제한업종과 세부자금별 추가 조건은 별도 확인이 필요합니다.
+        rules:
+          - field_key: region_code
+            operator: in
+            value: ["11"]
+            description: 서울특별시에 사업자등록된 사업체여야 합니다.
+          - field_key: business_status
+            operator: equals
+            value: operating
+            description: 사업자등록을 마치고 영업 중이어야 합니다.
+          - field_key: is_small_business
+            operator: equals
+            value: true
+            description: 서비스에서는 공통대상 중 소상공인만 추천합니다.
+    sources:
+      - &seoul_source
+        data_source_key: seoul-sme-funds-2026
+        external_id: seoul-sme-funds-2026
+        title: 2026년 중소기업육성자금 융자지원
+        official_url: *seoul_url
+        published_at: 2026-03-12T00:00:00+09:00
+        checked_at: *checked
+  - slug: seoul-2026-innovation-business-leap
+    name: 2026 서울시 혁신형기업도약자금
+    product_type: policy_fund
+    status: active
+    summary: 기술·경영혁신기업과 서울시 특화산업·시책사업자를 지원하는 직접융자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *direct_extra
+      funding_purposes: [working_capital, facilities]
+      eligibility_notes: 기술·경영혁신 또는 서울시 특화산업·시책사업 해당 여부를 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*seoul_loan]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-emergency-self-employed
+    name: 2026 서울시 긴급자영업자금
+    product_type: policy_fund
+    status: active
+    summary: 경영애로를 겪는 서울 자영업자의 긴급 운영자금을 지원합니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *direct_extra
+      funding_purposes: [working_capital]
+      eligibility_notes: 긴급지원 사유와 세부대상 증빙을 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*seoul_loan]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-disaster-sme
+    name: 2026 서울시 재해중소기업자금
+    product_type: policy_fund
+    status: active
+    summary: 재해 피해를 입은 서울 소재 중소기업·소상공인의 복구를 지원합니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *direct_extra
+      funding_purposes: [working_capital, facilities]
+      eligibility_notes: 재해 피해 확인과 공고상 인정 범위를 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*seoul_loan]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-growth-foundation
+    name: 2026 서울시 성장기반자금
+    product_type: policy_fund
+    status: active
+    summary: 서울 소재 기업의 안정적인 성장기반 조성을 지원하는 직접융자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *direct_extra
+      funding_purposes: [working_capital, facilities]
+    organization_roles: *seoul_roles
+    benefits: [*seoul_loan]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-economic-vitality
+    name: 2026 서울시 경제활성화자금
+    product_type: policy_fund
+    status: active
+    summary: 서울 기업의 경영안정과 경제활성화를 지원하는 시중은행협력자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data: &cooperative_extra
+      funding_purposes: [working_capital]
+      rate_basis: variable
+      application_channels: [서울신용보증재단 방문상담, 서울신용보증재단 비대면상담]
+      closing_condition: 예산 소진시까지
+      category: 시중은행협력자금
+      eligibility_notes: 융자제한업종과 협약은행 심사조건을 확인해야 합니다.
+      curation_level: official_overview
+    organization_roles: *seoul_roles
+    benefits:
+      - benefit_type: loan
+        original_text: 협약은행 대출금리에서 서울시 이차보전을 적용하며 세부조건은 공고문을 확인해야 합니다.
+      - &interest_support
+        benefit_type: interest_subsidy
+        original_text: 자금별 이차보전율은 2026년 서울시 공고문을 확인해야 합니다.
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-startup-business
+    name: 2026 서울시 창업기업자금
+    product_type: policy_fund
+    status: active
+    summary: 서울 소재 창업기업의 초기 경영과 성장을 지원하는 시중은행협력자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *cooperative_extra
+      funding_purposes: [startup, working_capital]
+      eligibility_notes: 창업기업 인정 업력과 교육·보증 등 세부요건을 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*interest_support]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-inclusive-finance
+    name: 2026 서울시 포용금융자금
+    product_type: policy_fund
+    status: active
+    summary: 금융 접근성이 낮은 서울 소상공인을 지원하는 시중은행협력자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *cooperative_extra
+      eligibility_notes: 포용금융 세부대상과 신용·보증요건을 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*interest_support]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-fast-dream
+    name: 2026 서울시 신속드림자금
+    product_type: policy_fund
+    status: active
+    summary: 서울 소상공인에게 신속한 금융지원을 제공하는 시중은행협력자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *cooperative_extra
+      eligibility_notes: 비대면 신청 및 신속심사 세부대상을 확인해야 합니다.
+    organization_roles:
+      - organization_code: seoul
+        role: authority
+      - organization_code: seoul-credit
+        role: guarantor
+      - organization_code: seoul-credit
+        role: operator
+    benefits:
+      - benefit_type: guarantee
+        original_text: 서울신용보증재단 보증심사가 필요한 연계자금입니다.
+      - *interest_support
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-hope-companion-refinance
+    name: 2026 서울시 희망동행자금
+    product_type: policy_fund
+    status: active
+    summary: 기존 사업자대출의 상환부담 완화를 지원하는 대환 목적 시중은행협력자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *cooperative_extra
+      funding_purposes: [refinance]
+      eligibility_notes: 대환 대상 기존대출과 신용·보증요건을 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*interest_support]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-recovery-support
+    name: 2026 서울시 재기지원자금
+    product_type: policy_fund
+    status: active
+    summary: 재창업·재도전 중인 서울 소상공인의 경영복귀를 지원합니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *cooperative_extra
+      funding_purposes: [startup, working_capital]
+      eligibility_notes: 재기지원 대상과 교육·컨설팅 이수 등 세부요건을 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*interest_support]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-job-creation-excellence
+    name: 2026 서울시 일자리창출우수기업자금
+    product_type: policy_fund
+    status: active
+    summary: 일자리 창출 실적이 우수한 서울 기업을 지원하는 시중은행협력자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *cooperative_extra
+      eligibility_notes: 고용증가와 우수기업 인정 기준을 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*interest_support]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-esg
+    name: 2026 서울시 ESG 자금
+    product_type: policy_fund
+    status: active
+    summary: ESG 경영을 추진하는 서울 기업을 지원하는 시중은행협력자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *cooperative_extra
+      eligibility_notes: ESG 인정 분야와 증빙요건을 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*interest_support]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-delivery-coexistence
+    name: 2026 서울배달상생자금
+    product_type: policy_fund
+    status: active
+    summary: 서울시 공공·상생 배달 생태계 참여 사업자의 경영을 지원합니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *cooperative_extra
+      eligibility_notes: 서울배달 참여와 매출 등 세부요건을 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*interest_support]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-vulnerable-business
+    name: 2026 서울시 취약사업자지원자금
+    product_type: policy_fund
+    status: active
+    summary: 금융·경영상 취약한 서울 사업자를 지원하는 시중은행협력자금입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      <<: *cooperative_extra
+      eligibility_notes: 취약사업자 인정 신용·매출·경영상황 기준을 확인해야 합니다.
+    organization_roles: *seoul_roles
+    benefits: [*interest_support]
+    eligibility_groups: [*seoul_common]
+    sources: [*seoul_source]
+  - slug: seoul-2026-safe-credit-line
+    name: 2026 서울시 안심통장
+    product_type: guarantee
+    status: unknown
+    summary: 서울신용보증재단 보증과 마이너스통장을 결합한 서울 소상공인 금융지원입니다.
+    application_url: *seoul_url
+    last_checked_at: *checked
+    extra_data:
+      funding_purposes: [working_capital]
+      rate_basis: variable
+      repayment_methods: [credit_line]
+      application_channels: [서울신용보증재단 앱]
+      closing_condition: 별도 시행공고 및 예산 확인 필요
+      category: 안심통장 특별보증
+      eligibility_notes: 공식 페이지가 안내한 별도 시행공고의 현재 접수상태와 조건을 확인해야 합니다.
+      curation_level: official_overview
+    organization_roles:
+      - organization_code: seoul
+        role: authority
+      - organization_code: seoul-credit
+        role: guarantor
+      - organization_code: seoul-credit
+        role: operator
+    benefits:
+      - benefit_type: guarantee
+        original_text: 서울신용보증재단 특별보증과 마이너스통장을 연계합니다.
+    eligibility_groups: [*seoul_common]
+    sources:
+      - *seoul_source
+      - data_source_key: seoul-credit-products
+        external_id: seoul-safe-credit-line-2026
+        title: 서울신용보증재단 안심통장 안내
+        official_url: https://www.seoulshinbo.co.kr/
+        checked_at: *checked

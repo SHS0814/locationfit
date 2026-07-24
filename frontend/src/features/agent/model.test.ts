@@ -103,6 +103,27 @@ describe('agent session model', () => {
     expect(restored.workspaceChats.finance[0].content).toBe('자금 질문')
   })
 
+  it('clears only a legacy hardcoded finance plan while preserving its inputs', () => {
+    const draft = { ...emptyDraft, industry_code: 'CS100001' }
+    const restored = restoreSession(JSON.stringify({
+      schemaVersion: 8,
+      history: [{ role: 'user', content: '기존 금융계획' }],
+      draft,
+      phase: 'results',
+      leaseCandidates: [],
+      leaseFinanceById: {
+        'listing-1': {
+          additionalCosts: { interior_krw: 5_000_000 },
+          eligibility: { own_capital_krw: 10_000_000, business_status: 'pre_startup' },
+          plan: { policy_candidates: [{ program_id: 'legacy-hardcoded' }] },
+        },
+      },
+    }))
+
+    expect(restored.leaseFinanceById['listing-1'].plan).toBeNull()
+    expect(restored.leaseFinanceById['listing-1'].additionalCosts.interior_krw).toBe(5_000_000)
+  })
+
   it('keeps an industry-only draft ready after strategy selection', () => {
     expect(isDraftReady({ ...emptyDraft, industry_code: 'CS100001', strategy: 'growth' })).toBe(true)
   })

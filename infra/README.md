@@ -4,14 +4,18 @@
 
 ## 협업용 Docker Compose
 
-서버 배포 전 로컬 협업 환경은 저장소 루트의 `compose.yaml`을 사용한다. 백엔드는
-FastAPI 개발 서버, 프런트엔드는 Vite 개발 서버로 실행해 코드 변경을 바로 반영한다.
+서버 배포 전 로컬 협업 환경은 저장소 루트의 `compose.yaml`을 사용한다. PostgreSQL은
+금융지원 상품 카탈로그를 담당하고, 백엔드는 FastAPI 개발 서버, 프런트엔드는 Vite
+개발 서버로 실행해 코드 변경을 바로 반영한다.
 
 처음 실행:
 
 ```bash
 cp .env.docker.example .env.docker
+cp .env.postgres.example .env.postgres
+# 최초 실행 전에 두 파일의 PostgreSQL 비밀번호를 같은 임의 값으로 변경
 docker compose up --build
+docker compose run --rm backend alembic -c backend/alembic.ini upgrade head
 ```
 
 기본 접속 주소:
@@ -19,6 +23,7 @@ docker compose up --build
 - 웹: `http://localhost:5173`
 - API 상태: `http://localhost:8000/api/v1/health/live`
 - API 문서: `http://localhost:8000/docs`
+- PostgreSQL: `localhost:5432` (`.env.postgres` 사용, 호스트 루프백에서만 접근 가능)
 
 자주 쓰는 명령:
 

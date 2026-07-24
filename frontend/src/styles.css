@@ -371,18 +371,24 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
 .funding-breakdown dt { color: #858178; font-size: 8px; }
 .funding-breakdown dd { margin: 3px 0 0; font-size: 10px; font-weight: 800; }
 .finance-result > h3 { margin: 0 0 11px; font-size: 16px; }
+.catalog-result-summary { margin: -4px 0 14px; color: #77736c; font-size: 9px; }
 .policy-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .policy-card { padding: 16px; border: 1px solid #dedbd2; border-top: 3px solid #b59627; background: #fff; }
 .policy-card.basic_fit { border-top-color: #2b8059; }
 .policy-card.not_eligible { border-top-color: #a9a59c; background: #f6f5f1; }
-.policy-card > div { display: flex; justify-content: space-between; gap: 8px; color: #7d7971; font-size: 8px; }
-.policy-card > div b { padding: 3px 5px; border-radius: 99px; background: #fff3cf; color: #7a5c0c; }
-.policy-card.basic_fit > div b { background: #e4f3eb; color: #276d4d; }
-.policy-card.not_eligible > div b { background: #e8e7e2; color: #6f6b64; }
+.policy-card-header, .policy-card-footer { display: flex; justify-content: space-between; gap: 8px; color: #7d7971; font-size: 8px; }
+.policy-card-header b { flex: 0 0 auto; padding: 3px 5px; border-radius: 99px; background: #fff3cf; color: #7a5c0c; }
+.policy-card.basic_fit .policy-card-header b { background: #e4f3eb; color: #276d4d; }
+.policy-card.not_eligible .policy-card-header b { background: #e8e7e2; color: #6f6b64; }
 .policy-card h4 { margin: 10px 0 6px; font-size: 13px; }
 .policy-card p, .policy-card li { color: #625f59; font-size: 9px; line-height: 1.55; }
 .policy-card p { margin: 0; }
 .policy-card ul { margin: 8px 0; padding-left: 17px; }
+.policy-card .policy-summary { margin-bottom: 7px; color: #353a35; }
+.policy-benefits { padding: 8px 10px 8px 25px !important; background: #f4f7f3; }
+.policy-card details { margin: 9px 0; color: #6d685f; font-size: 8px; }
+.policy-card summary { cursor: pointer; font-weight: 700; }
+.policy-card-footer { align-items: center; margin-top: 11px; padding-top: 9px; border-top: 1px solid #ebe8e0; }
 .policy-card a { color: #286849; font-size: 8px; font-weight: 700; }
 .finance-final-disclosure { display: block; margin-top: 14px; color: #7f7b74; font-size: 8px; line-height: 1.6; }
 .store-explorer { display: grid; gap: 14px; }
