@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from backend.app.schemas.recommendation import RecommendationRequestSchema
 from backend.app.services.recommender_service import RecommenderService
@@ -16,6 +17,7 @@ def test_metadata_and_recommendation_with_real_artifacts() -> None:
     assert "강남구" in metadata["districts"]
     assert len(service.district_boundaries) == 25
     assert set(service.district_boundaries) == set(metadata["districts"])
+    assert metadata["performance_weight_presets"]["balanced"]["growth"] == 0.27
 
     geography = service.market_geographies(
         group_by="district",
@@ -39,6 +41,10 @@ def test_metadata_and_recommendation_with_real_artifacts() -> None:
     assert all(item["boundary"]["type"] in {"Polygon", "MultiPolygon"} for item in recommendations)
     assert all(item["boundary"]["coordinates"] for item in recommendations)
     assert isinstance(recommendations[0]["positive_reasons"], list)
+    assert set(recommendations[0]["performance_breakdown"]) == {
+        "scale_productivity", "growth", "stability", "competition", "closure_risk",
+    }
+    assert diagnostics["performance_weights_source"] == "strategy_default"
 
 
 def test_recommendation_report_compares_top_three_with_full_eligible_median() -> None:
@@ -73,11 +79,55 @@ def test_recommendation_report_compares_top_three_with_full_eligible_median() ->
     )
     assert "competition_intensity" not in report["areas"][0]["metrics"]
     assert report["competition_reference_period"] == "2025Q4"
+    assert report["performance_weights_source"] == "strategy_default"
+    assert report["areas"][0]["performance_breakdown"] == recommendations[0]["performance_breakdown"]
 
     repeated, repeated_diagnostics = service.recommend(request)
     assert [item["area_code"] for item in repeated] == [item["area_code"] for item in recommendations]
     assert [item["final_score"] for item in repeated] == [item["final_score"] for item in recommendations]
     assert repeated_diagnostics == diagnostics
+
+
+def test_custom_performance_weights_contract_and_normalization() -> None:
+    service = RecommenderService(ARTIFACT_DIR)
+    request = RecommendationRequestSchema(
+        industry_code="CS100001",
+        top_n=3,
+        performance_group_weights={
+            "scale_productivity": 20,
+            "growth": 40,
+            "stability": 20,
+            "competition": 5,
+            "closure_risk": 15,
+        },
+    )
+    recommendations, diagnostics, report = service.recommend_with_report(request)
+    assert diagnostics["performance_weights_source"] == "user_custom"
+    assert diagnostics["performance_group_weights"] == pytest.approx({
+        "scale_productivity": 0.2,
+        "growth": 0.4,
+        "stability": 0.2,
+        "competition": 0.05,
+        "closure_risk": 0.15,
+    })
+    assert report["performance_group_weights"] == diagnostics["performance_group_weights"]
+    for item in recommendations:
+        assert sum(
+            group["contribution"] for group in item["performance_breakdown"].values()
+        ) == pytest.approx(item["raw_evidence_score"], abs=1e-5)
+
+
+@pytest.mark.parametrize("weights", [
+    {"scale_productivity": 0, "growth": 0, "stability": 0, "competition": 0, "closure_risk": 0},
+    {"scale_productivity": 1, "growth": -1, "stability": 1, "competition": 1, "closure_risk": 1},
+    {"scale_productivity": 1, "growth": float("nan"), "stability": 1, "competition": 1, "closure_risk": 1},
+    {"scale_productivity": 1, "growth": float("inf"), "stability": 1, "competition": 1, "closure_risk": 1},
+    {"scale_productivity": 1, "growth": 1, "stability": 1, "competition": 1},
+    {"scale_productivity": 1, "growth": 1, "stability": 1, "competition": 1, "closure_risk": 1, "unknown": 1},
+])
+def test_custom_performance_weight_validation(weights: dict[str, float]) -> None:
+    with pytest.raises(ValidationError):
+        RecommendationRequestSchema(industry_code="CS100001", performance_group_weights=weights)
 
 
 def test_recommendation_evidence_context_exposes_sources_methodology_and_limits() -> None:

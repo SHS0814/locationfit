@@ -7,8 +7,24 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend.app.services.cost_provider import FloorType
 
 
+class PerformanceGroupWeights(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    scale_productivity: float = Field(ge=0)
+    growth: float = Field(ge=0)
+    stability: float = Field(ge=0)
+    competition: float = Field(ge=0)
+    closure_risk: float = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_positive_total(self) -> "PerformanceGroupWeights":
+        if sum(self.model_dump().values()) <= 0:
+            raise ValueError("성과 그룹 가중치는 하나 이상 0보다 커야 합니다.")
+        return self
+
+
 class RecommendationRequestSchema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
     industry_code: str = Field(min_length=1)
     preferred_area_types: list[str] = Field(default_factory=list)
@@ -32,6 +48,7 @@ class RecommendationRequestSchema(BaseModel):
     min_data_reliability: float = Field(0, ge=0, le=1)
     top_n: int = Field(10, ge=1, le=50)
     strategy: Literal["balanced", "condition_fit", "growth", "stability"] = "balanced"
+    performance_group_weights: PerformanceGroupWeights | None = None
     total_startup_budget_krw: float | None = Field(default=None, gt=0)
     monthly_converted_rent_limit_krw: float | None = Field(default=None, gt=0)
     rentable_area_sqm: float | None = Field(default=None, gt=0, le=10_000)
@@ -54,6 +71,14 @@ class FitReason(BaseModel):
     feature: str
     fit_score: float
     weight: float
+
+
+class PerformanceGroupContribution(BaseModel):
+    score: float | None
+    requested_weight: float
+    effective_weight: float
+    contribution: float
+    available: bool
 
 
 class AreaBoundary(BaseModel):
@@ -113,6 +138,7 @@ class RecommendationItem(BaseModel):
     positive_reasons: list[FitReason]
     negative_reasons: list[FitReason]
     evidence_summary: dict[str, Any]
+    performance_breakdown: dict[str, PerformanceGroupContribution]
     warnings: list[str]
     rental_estimate: "RentalEstimateSchema | None" = None
 
@@ -159,3 +185,4 @@ class MetadataResponse(BaseModel):
     age_groups: list[MetadataOption]
     time_bands: list[MetadataOption]
     rent_floors: list[MetadataOption]
+    performance_weight_presets: dict[str, PerformanceGroupWeights]

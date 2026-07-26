@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react'
 import type { MetadataResponse, RecommendationRequest } from '../../types/api'
 import { toggleValue } from './model'
+import { PerformanceWeightsControl } from './PerformanceWeightsControl'
 
 interface Props {
   metadata: MetadataResponse
@@ -62,6 +63,12 @@ export function RecommendationForm({ metadata, value, loading, onChange, onSubmi
           </select>
         </label>
       </div>
+
+      <PerformanceWeightsControl
+        metadata={metadata}
+        value={value.performance_group_weights}
+        onChange={(weights) => update('performance_group_weights', weights)}
+      />
 
       <details className="advanced-options">
         <summary>

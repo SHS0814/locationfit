@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { MarkdownContent } from '../../components/MarkdownContent'
 import type { AgentMessage, WorkspaceAgentScope } from '../../types/api'
 
 const workspaceCopy: Record<WorkspaceAgentScope, {
@@ -63,7 +64,10 @@ export function WorkspaceAgentPanel({
       <div className="chat-log" aria-live="polite">
         {history.map((item, index) => (
           <div key={`${item.role}-${index}`} className={`chat-message ${item.role}`}>
-            <span>{item.role === 'assistant' ? 'AI' : '나'}</span><p>{item.content}</p>
+            <span>{item.role === 'assistant' ? 'AI' : '나'}</span>
+            {item.role === 'assistant'
+              ? <MarkdownContent content={item.content} />
+              : <p>{item.content}</p>}
           </div>
         ))}
         {loading && <div className="chat-message assistant pending"><span>AI</span><p>이 페이지의 데이터만 확인하고 있어요…</p></div>}

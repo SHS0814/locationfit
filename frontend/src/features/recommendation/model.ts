@@ -23,6 +23,7 @@ export const emptyRecommendationRequest: RecommendationRequest = {
   min_data_reliability: 0,
   top_n: 10,
   strategy: 'balanced',
+  performance_group_weights: null,
   total_startup_budget_krw: null,
   monthly_converted_rent_limit_krw: null,
   rentable_area_sqm: null,

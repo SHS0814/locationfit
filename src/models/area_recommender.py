@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
 import json
 from pathlib import Path
@@ -45,6 +46,7 @@ EVIDENCE_GROUPS: dict[str, tuple[str, ...]] = {
     "competition": ("competition_intensity",),
     "closure_risk": ("closing_rate", "churn_rate", "recent_closure_rate_increase"),
 }
+PERFORMANCE_GROUP_KEYS = tuple(EVIDENCE_GROUPS)
 STRATEGY_GROUP_WEIGHTS: dict[str, dict[str, float]] = {
     "balanced": {"scale_productivity": 0.35, "growth": 0.27, "stability": 0.18, "competition": 0.08, "closure_risk": 0.12},
     "condition_fit": {"scale_productivity": 0.35, "growth": 0.27, "stability": 0.18, "competition": 0.08, "closure_risk": 0.12},
@@ -131,6 +133,7 @@ class RecommendationRequest:
     min_data_reliability: float = 0.0
     top_n: int = 10
     strategy: RecommendationStrategy = "balanced"
+    performance_group_weights: dict[str, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -158,6 +161,34 @@ class RecommendationResult:
 def _validate_importance(value: float, name: str) -> None:
     if not np.isfinite(value) or value < 0 or value > 1:
         raise ValueError(f"{name}은 0~1 사이여야 합니다: {value}")
+
+
+def normalize_performance_weights(weights: Mapping[str, Any]) -> dict[str, float]:
+    """Validate and normalize a complete set of performance group weights."""
+    if not isinstance(weights, Mapping):
+        raise ValueError("performance_group_weights는 객체여야 합니다.")
+    supplied = set(weights)
+    expected = set(PERFORMANCE_GROUP_KEYS)
+    unknown = sorted(supplied - expected)
+    missing = sorted(expected - supplied)
+    if unknown:
+        raise ValueError(f"알 수 없는 performance group: {unknown}")
+    if missing:
+        raise ValueError(f"performance group 누락: {missing}")
+
+    numeric: dict[str, float] = {}
+    for group in PERFORMANCE_GROUP_KEYS:
+        try:
+            value = float(weights[group])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{group} weight는 유한한 숫자여야 합니다.") from exc
+        if not np.isfinite(value) or value < 0:
+            raise ValueError(f"{group} weight는 0 이상의 유한한 숫자여야 합니다.")
+        numeric[group] = value
+    total = sum(numeric.values())
+    if total <= 0:
+        raise ValueError("performance group weight는 하나 이상 양수여야 합니다.")
+    return {group: numeric[group] / total for group in PERFORMANCE_GROUP_KEYS}
 
 
 def validate_request(
@@ -189,6 +220,8 @@ def validate_request(
         raise ValueError("top_n은 1~100 사이여야 합니다.")
     if request.strategy not in STRATEGY_FINAL_WEIGHTS:
         raise ValueError(f"지원하지 않는 strategy입니다: {request.strategy}")
+    if request.performance_group_weights is not None:
+        normalize_performance_weights(request.performance_group_weights)
 
 
 def build_preference_features(request: RecommendationRequest, available_columns: Iterable[str]) -> tuple[PreferenceFeature, ...]:
@@ -351,9 +384,16 @@ def robust_percentile(series: pd.Series, *, positive: bool) -> pd.Series:
     return result
 
 
-def strategy_evidence_weights(strategy: RecommendationStrategy) -> dict[str, tuple[float, Literal["positive", "negative"]]]:
+def strategy_evidence_weights(
+    strategy: RecommendationStrategy,
+    performance_group_weights: Mapping[str, Any] | None = None,
+) -> dict[str, tuple[float, Literal["positive", "negative"]]]:
     """Expand versioned group weights while preserving metric directions and relative weights."""
-    group_weights = STRATEGY_GROUP_WEIGHTS[strategy]
+    group_weights = (
+        normalize_performance_weights(performance_group_weights)
+        if performance_group_weights is not None
+        else STRATEGY_GROUP_WEIGHTS[strategy]
+    )
     expanded: dict[str, tuple[float, Literal["positive", "negative"]]] = {}
     for group, metrics in EVIDENCE_GROUPS.items():
         base_total = sum(EVIDENCE_WEIGHTS[metric][0] for metric in metrics)
@@ -369,6 +409,7 @@ def score_industry_evidence(
     industry_evidence: pd.DataFrame,
     *,
     strategy: RecommendationStrategy = "balanced",
+    performance_group_weights: Mapping[str, Any] | None = None,
 ) -> pd.DataFrame:
     """Percentile-score observed metrics and shrink scores toward the industry mean."""
     if industry_evidence["industry_code"].nunique() != 1:
@@ -376,7 +417,12 @@ def score_industry_evidence(
     scored = industry_evidence.copy()
     weighted_sum = pd.Series(0.0, index=scored.index)
     available_weight = pd.Series(0.0, index=scored.index)
-    evidence_weights = strategy_evidence_weights(strategy)
+    group_weights = (
+        normalize_performance_weights(performance_group_weights)
+        if performance_group_weights is not None
+        else dict(STRATEGY_GROUP_WEIGHTS[strategy])
+    )
+    evidence_weights = strategy_evidence_weights(strategy, performance_group_weights)
     for metric, (weight, direction) in evidence_weights.items():
         if metric not in scored:
             raise ValueError(f"evidence 지표 컬럼 누락: {metric}")
@@ -392,6 +438,55 @@ def score_industry_evidence(
         out=np.full(len(scored), np.nan),
         where=available_weight.gt(0),
     )
+    group_scores: dict[str, pd.Series] = {}
+    group_weight_parts: dict[str, pd.Series] = {}
+    for group, metrics in EVIDENCE_GROUPS.items():
+        base_total = sum(EVIDENCE_WEIGHTS[metric][0] for metric in metrics)
+        group_sum = pd.Series(0.0, index=scored.index)
+        group_available_weight = pd.Series(0.0, index=scored.index)
+        for metric in metrics:
+            base_weight = EVIDENCE_WEIGHTS[metric][0]
+            component = scored[f"evidence_component_{metric}"]
+            valid = component.notna()
+            group_sum.loc[valid] += base_weight * component.loc[valid]
+            group_available_weight.loc[valid] += base_weight
+        group_scores[group] = pd.Series(
+            np.divide(
+                group_sum,
+                group_available_weight,
+                out=np.full(len(scored), np.nan),
+                where=group_available_weight.gt(0),
+            ),
+            index=scored.index,
+        )
+        group_weight_parts[group] = group_weights[group] * group_available_weight / base_total
+
+    effective_denominator = sum(group_weight_parts.values())
+
+    def build_breakdown(index: Any) -> dict[str, dict[str, float | bool | None]]:
+        denominator = float(effective_denominator.loc[index])
+        breakdown: dict[str, dict[str, float | bool | None]] = {}
+        for group in PERFORMANCE_GROUP_KEYS:
+            score = group_scores[group].loc[index]
+            available = bool(pd.notna(score))
+            effective = (
+                float(group_weight_parts[group].loc[index]) / denominator
+                if available and denominator > 0 else 0.0
+            )
+            breakdown[group] = {
+                "score": round(float(score), 6) if available else None,
+                "requested_weight": round(float(group_weights[group]), 12),
+                "effective_weight": round(effective, 12),
+                "contribution": round(float(score) * effective, 6) if available else 0.0,
+                "available": available,
+            }
+        return breakdown
+
+    scored["performance_breakdown"] = [build_breakdown(index) for index in scored.index]
+    scored["performance_missing_groups"] = [
+        [group for group in PERFORMANCE_GROUP_KEYS if not breakdown[group]["available"]]
+        for breakdown in scored["performance_breakdown"]
+    ]
     industry_mean = float(scored["raw_evidence_score"].mean())
     scored["evidence_score_multiply"] = scored["raw_evidence_score"] * scored["data_reliability"]
     scored["evidence_score_shrinkage"] = (
@@ -530,6 +625,12 @@ class AreaRecommender:
             warnings.append("현재분기 매출이 없어 0으로 대체하지 않았습니다.")
         if float(row.get("evidence_metric_coverage", 1.0)) < 0.8:
             warnings.append("일부 evidence 지표가 없어 가용 지표만 정규화했습니다.")
+        missing_groups = row.get("performance_missing_groups", [])
+        if isinstance(missing_groups, list) and missing_groups:
+            warnings.append(
+                "성과 그룹 결측으로 가용 그룹 가중치를 재정규화했습니다: "
+                + ", ".join(missing_groups)
+            )
         return (
             json.dumps(positive, ensure_ascii=False),
             json.dumps(negative, ensure_ascii=False),
@@ -555,7 +656,17 @@ class AreaRecommender:
         structural = self.index.merge(condition, on="area_code", how="left", validate="one_to_one")
         structural = self._hard_filter(structural, request)
         industry_raw = self.evidence.loc[self.evidence["industry_code"].eq(request.industry_code)].copy()
-        industry_scored = score_industry_evidence(industry_raw, strategy=request.strategy)
+        performance_weights = (
+            normalize_performance_weights(request.performance_group_weights)
+            if request.performance_group_weights is not None
+            else dict(STRATEGY_GROUP_WEIGHTS[request.strategy])
+        )
+        weights_source = "user_custom" if request.performance_group_weights is not None else "strategy_default"
+        industry_scored = score_industry_evidence(
+            industry_raw,
+            strategy=request.strategy,
+            performance_group_weights=request.performance_group_weights,
+        )
         d_count = int(industry_scored["reliability_grade"].eq("D").sum())
         stale_count = int(industry_scored["stale_observation_flag"].eq(1).sum())
         eligible_candidates = structural.merge(
@@ -601,6 +712,7 @@ class AreaRecommender:
             "final_score", "condition_fit_score", "raw_evidence_score", "reliability_adjusted_evidence_score",
             "data_reliability", "reliability_grade", "stale_flag", "positive_reasons", "negative_reasons",
             "evidence_summary", "warning_messages", "selected_k", "distance_metric",
+            "performance_breakdown",
         ]
         recommendations = candidates.head(request.top_n)[output_columns].copy()
         diagnostics = {
@@ -630,6 +742,8 @@ class AreaRecommender:
             "policy_version": POLICY_VERSION,
             "final_weights": final_weights,
             "evidence_group_weights": STRATEGY_GROUP_WEIGHTS[request.strategy],
+            "performance_group_weights": performance_weights,
+            "performance_weights_source": weights_source,
         }
         return RecommendationResult(
             recommendations,

@@ -12,7 +12,12 @@ export interface MetadataResponse {
   age_groups: MetadataOption[]
   time_bands: MetadataOption[]
   rent_floors: MetadataOption[]
+  performance_weight_presets: Record<PerformanceWeightPreset, PerformanceGroupWeights>
 }
+
+export type PerformanceGroupKey = 'scale_productivity' | 'growth' | 'stability' | 'competition' | 'closure_risk'
+export type PerformanceGroupWeights = Record<PerformanceGroupKey, number>
+export type PerformanceWeightPreset = 'balanced' | 'growth_focused' | 'stability_focused'
 
 export interface RecommendationRequest {
   industry_code: string
@@ -37,6 +42,7 @@ export interface RecommendationRequest {
   min_data_reliability: number
   top_n: number
   strategy: 'balanced' | 'condition_fit' | 'growth' | 'stability'
+  performance_group_weights: PerformanceGroupWeights | null
   total_startup_budget_krw: number | null
   monthly_converted_rent_limit_krw: number | null
   rentable_area_sqm: number | null
@@ -101,8 +107,17 @@ export interface RecommendationItem {
   positive_reasons: FitReason[]
   negative_reasons: FitReason[]
   evidence_summary: Record<string, unknown>
+  performance_breakdown: Record<PerformanceGroupKey, PerformanceGroupContribution>
   warnings: string[]
   rental_estimate: RentalEstimate | null
+}
+
+export interface PerformanceGroupContribution {
+  score: number | null
+  requested_weight: number
+  effective_weight: number
+  contribution: number
+  available: boolean
 }
 
 export interface LeasePlanRequest {
@@ -508,6 +523,7 @@ export interface RecommendationReportArea {
   positive_reasons: FitReason[]
   negative_reasons: FitReason[]
   warnings: string[]
+  performance_breakdown: Record<PerformanceGroupKey, PerformanceGroupContribution>
 }
 
 export interface RecommendationReport {
@@ -517,6 +533,8 @@ export interface RecommendationReport {
   competition_reference_period: string
   rental_estimate_basis: string
   rental_estimate_uses_default: boolean
+  performance_group_weights: PerformanceGroupWeights
+  performance_weights_source: 'strategy_default' | 'user_custom'
   benchmark: RecommendationReportMetrics
   areas: RecommendationReportArea[]
 }

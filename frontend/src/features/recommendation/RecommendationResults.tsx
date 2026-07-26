@@ -1,4 +1,5 @@
 import type { RecommendationItem } from '../../types/api'
+import { performanceContributionSummary, performanceGroups } from './performanceWeights'
 
 interface Props {
   items: RecommendationItem[]
@@ -39,6 +40,22 @@ export function RecommendationResults({ items, selectedCode, onSelect }: Props) 
               )}
               {item.budget_fit_score != null && <span className="budget-fit">예산 적합 {item.budget_fit_score.toFixed(1)}점</span>}
               {item.warnings.length > 0 && <p className="warning">{item.warnings[0]}</p>}
+              <div className="performance-breakdown-compact">
+                <p>{performanceContributionSummary(item.performance_breakdown)}</p>
+                <div role="table" aria-label={`${item.area_name} 성과 그룹 기여도`}>
+                  {performanceGroups.map(({ key, label }) => {
+                    const group = item.performance_breakdown[key]
+                    return (
+                      <div role="row" key={key} className={!group.available ? 'missing' : ''}>
+                        <span role="cell">{label}</span>
+                        <span role="cell">{group.available && group.score != null ? `${group.score.toFixed(1)}점` : '자료 없음'}</span>
+                        <span role="cell">비중 {(group.effective_weight * 100).toFixed(1)}%</span>
+                        <strong role="cell">기여 {group.contribution.toFixed(1)}점</strong>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
             <div className="score">
               <strong>{item.final_score.toFixed(1)}</strong>

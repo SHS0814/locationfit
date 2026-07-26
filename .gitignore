@@ -75,3 +75,5 @@ pnpm-debug.log*
 *.temp
 
 # backend/artifacts/current is intentionally versioned for container deployment.
+
+docs/

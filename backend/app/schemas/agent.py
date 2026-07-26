@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.schemas.recommendation import (
     FitReason,
+    PerformanceGroupContribution,
+    PerformanceGroupWeights,
     RecommendationItem,
     RecommendationRequestSchema,
     RentalEstimateSchema,
@@ -71,6 +73,7 @@ class RecommendationDraft(BaseModel):
     min_data_reliability: float = Field(0, ge=0, le=1)
     top_n: int = Field(10, ge=1, le=50)
     strategy: Literal["balanced", "condition_fit", "growth", "stability"] = "balanced"
+    performance_group_weights: PerformanceGroupWeights | None = None
     total_startup_budget_krw: float | None = Field(default=None, gt=0)
     monthly_converted_rent_limit_krw: float | None = Field(default=None, gt=0)
     rentable_area_sqm: float | None = Field(default=None, gt=0, le=10_000)
@@ -304,6 +307,7 @@ class RecommendationReportArea(BaseModel):
     positive_reasons: list[FitReason] = Field(default_factory=list)
     negative_reasons: list[FitReason] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    performance_breakdown: dict[str, PerformanceGroupContribution]
 
 
 class RecommendationReport(BaseModel):
@@ -315,6 +319,8 @@ class RecommendationReport(BaseModel):
     competition_reference_period: str
     rental_estimate_basis: str
     rental_estimate_uses_default: bool
+    performance_group_weights: PerformanceGroupWeights
+    performance_weights_source: Literal["strategy_default", "user_custom"]
     benchmark: RecommendationReportMetrics
     areas: list[RecommendationReportArea]
 

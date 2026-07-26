@@ -145,6 +145,24 @@ docker compose run --rm backend alembic -c backend/alembic.ini current
 - `growth`: 조건 적합 45%, 성장 중심 성과 근거 55%
 - `stability`: 조건 적합 45%, 안정성 중심 성과 근거 55%
 
+최종점수의 전략별 비중은 고정되어 있다. 선택적으로 `performance_group_weights`를 보내면 업종 성과 내부의 5개 그룹 비중만 바뀌며, 서버가 합계 1로 정규화한다. 5개 키는 모두 필요하다.
+
+```json
+{
+  "industry_code": "CS100001",
+  "strategy": "balanced",
+  "performance_group_weights": {
+    "scale_productivity": 20,
+    "growth": 40,
+    "stability": 20,
+    "competition": 5,
+    "closure_risk": 15
+  }
+}
+```
+
+실제 적용값과 출처는 응답 `diagnostics.performance_group_weights`, `diagnostics.performance_weights_source`에 있으며, 각 후보의 `performance_breakdown`은 그룹 점수·요청 비중·결측 재정규화 후 실효 비중·원시 업종 성과점수 기여도를 제공한다.
+
 상담 중 서울 열린데이터나 서울시 상권분석서비스를 실시간 호출하지 않으며 배포 아티팩트만 읽는다. 추천 엔진은 데이터베이스를 사용하지 않는다. 추천 지도는 서울시 `상권분석서비스(영역-상권)` SHP(EPSG:5181)를 WGS84로 변환한 실제 Polygon/MultiPolygon 경계를 표시한다. 월 환산임대료 한도와 임대면적·층 구분을 모두 입력하면 기존 종합점수 80%와 임대예산 적합도 20%를 결합해 재정렬한다. 총 창업예산만 입력하거나 예산을 입력하지 않으면 기존 순위와 점수를 유지한다.
 
 서비스 아티팩트를 다시 만들 때는 서울 열린데이터광장 OA-15560의 `서울시 상권분석서비스(영역-상권).zip`을 풀어 SHP 구성 파일을 `data/raw/area/`에 둔다. 빌드 결과인 `area_boundaries.parquet`에는 1,650개 상권코드별 GeoJSON 경계가 저장된다. 자치구 지도는 [국가데이터처 JUSO 시군구 경계의 2015 GeoJSON 변환본](https://github.com/southkorea/seoul-maps/tree/master/juso/2015/json)을 사용하며, `data/raw/district/`의 SHP 또는 GeoJSON에서 서울 25개 자치구와 도형 유효성을 검증해 `district_boundaries.parquet`으로 만든다.

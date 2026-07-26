@@ -3,6 +3,7 @@ import { divIcon, geoJSON } from 'leaflet'
 import type { Feature, Geometry, Point } from 'geojson'
 import Supercluster from 'supercluster'
 import { CircleMarker, GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import { MarkdownContent } from '../../components/MarkdownContent'
 import type { AreaStoresResponse, RecommendationItem, StorePoint, StoreRelation, WebResearchResponse } from '../../types/api'
 import { filterStores } from './model'
 
@@ -47,10 +48,11 @@ function clusterIcon(count: number) {
   })
 }
 
-function StoreClusters({ stores, selectedStoreId, onSelect }: {
+function StoreClusters({ stores, selectedStoreId, onSelect, onSelectCluster }: {
   stores: StorePoint[]
   selectedStoreId: string | null
   onSelect: (store: StorePoint) => void
+  onSelectCluster: (stores: StorePoint[]) => void
 }) {
   const map = useMap()
   const [view, setView] = useState(() => ({
@@ -77,12 +79,18 @@ function StoreClusters({ stores, selectedStoreId, onSelect }: {
     const [longitude, latitude] = feature.geometry.coordinates
     if ('cluster' in feature.properties && feature.properties.cluster) {
       const clusterId = feature.properties.cluster_id
+      const count = feature.properties.point_count
       return (
         <Marker
           key={`cluster-${clusterId}`}
           position={[latitude, longitude]}
-          icon={clusterIcon(feature.properties.point_count)}
-          eventHandlers={{ click: () => map.setView([latitude, longitude], index.getClusterExpansionZoom(clusterId)) }}
+          icon={clusterIcon(count)}
+          title={`${count.toLocaleString('ko-KR')}개 업소 목록 보기`}
+          eventHandlers={{
+            click: () => onSelectCluster(
+              index.getLeaves(clusterId, Infinity).map((leaf) => leaf.properties.store),
+            ),
+          }}
         />
       )
     }
@@ -111,7 +119,7 @@ function ResearchCard({ result }: { result: WebResearchResponse }) {
   return (
     <section className="web-research-card">
       <div className="section-title"><span>{result.subject} 웹 정보</span><small>{new Date(result.searched_at).toLocaleString('ko-KR')}</small></div>
-      <p className="research-summary">{result.summary}</p>
+      <MarkdownContent className="research-summary" content={result.summary} />
       <div className="research-sources">
         {result.sources.map((source) => (
           <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.title}</a>
@@ -143,12 +151,20 @@ export function AreaStoreExplorer({
   area, analysis, relations, search, selectedStoreId, research, researchLoadingKey, leaseCandidateCount,
   onRelationsChange, onSearchChange, onSelectStore, onResearch, onAddLeaseCandidate, onOpenLeaseCandidates,
 }: Props) {
+  const [clusterStores, setClusterStores] = useState<StorePoint[]>([])
   const selectedStore = analysis.stores.find((store) => store.store_id === selectedStoreId) || null
-  const filteredStores = filterStores(analysis.stores, relations, search)
+  const filteredStores = useMemo(
+    () => filterStores(analysis.stores, relations, search),
+    [analysis.stores, relations, search],
+  )
   const areaResearch = research.find((item) => item.scope === 'area' && item.area_code === area.area_code)
   const storeResearch = selectedStore
     ? research.find((item) => item.scope === 'store' && item.store_id === selectedStore.store_id)
     : null
+
+  useEffect(() => {
+    setClusterStores([])
+  }, [area.area_code, relations, search])
 
   const toggleRelation = (relation: StoreRelation) => {
     onRelationsChange(relations.includes(relation)
@@ -186,11 +202,51 @@ export function AreaStoreExplorer({
           <MapContainer center={[area.latitude, area.longitude]} zoom={16} scrollWheelZoom preferCanvas className="map-container">
             <TileLayer url={tileUrl} attribution={attribution} />
             <GeoJSON data={boundaryFeature(area)} pathOptions={{ color: '#645300', weight: 2, fillColor: '#ffcc00', fillOpacity: 0.08 }} />
-            <StoreClusters stores={filteredStores} selectedStoreId={selectedStoreId} onSelect={(store) => onSelectStore(store.store_id)} />
+            <StoreClusters
+              stores={filteredStores}
+              selectedStoreId={selectedStoreId}
+              onSelect={(store) => {
+                setClusterStores([])
+                onSelectStore(store.store_id)
+              }}
+              onSelectCluster={(stores) => {
+                setClusterStores(stores)
+                onSelectStore(null)
+              }}
+            />
             <StoreViewport area={area} />
           </MapContainer>
           <div className="map-legend">{(Object.keys(relationLabels) as StoreRelation[]).map((relation) => <span key={relation}><i style={{ background: relationColors[relation] }} />{relationLabels[relation]}</span>)}</div>
         </div>
+
+        {clusterStores.length > 0 && (
+          <section className="store-cluster-list" aria-live="polite" aria-label="겹쳐 있는 업소 목록">
+            <header>
+              <div>
+                <small>선택한 숫자 버블</small>
+                <h3>겹쳐 있는 업소 {clusterStores.length.toLocaleString('ko-KR')}개</h3>
+                <p>업소를 선택하면 아래에서 상세 정보를 확인할 수 있습니다.</p>
+              </div>
+              <button type="button" onClick={() => setClusterStores([])} aria-label="업소 목록 닫기">×</button>
+            </header>
+            <ul>
+              {clusterStores.map((store) => (
+                <li key={store.store_id}>
+                  <button
+                    type="button"
+                    className={selectedStoreId === store.store_id ? 'active' : ''}
+                    onClick={() => onSelectStore(store.store_id)}
+                  >
+                    <span className={`relation-badge ${store.relation}`}>{relationLabels[store.relation]}</span>
+                    <strong>{store.name}{store.branch_name ? ` ${store.branch_name}` : ''}</strong>
+                    <span>{store.industry_small_name || store.industry_middle_name || store.industry_large_name || '업종 정보 없음'}</span>
+                    <small>{store.road_address || store.lot_address || '주소 정보 없음'}</small>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <aside className="store-detail-panel">
           {selectedStore ? (

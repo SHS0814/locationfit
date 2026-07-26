@@ -3,6 +3,7 @@ import type {
   RecommendationReportMetricKey,
 } from '../../types/api'
 import { formatBenchmarkDelta, formatReportValue } from './report'
+import { performanceGroups } from './performanceWeights'
 
 interface Props {
   report: RecommendationReport
@@ -38,6 +39,18 @@ export function RecommendationReportView({ report }: Props) {
         <p>동일 조건의 유효 후보 {report.candidate_count.toLocaleString('ko-KR')}곳 중앙값과 비교했습니다.</p>
       </header>
 
+      <section className="report-performance-policy" aria-label="적용된 성과 평가 기준">
+        <div>
+          <strong>적용된 성과 평가 기준</strong>
+          <span>가중치 출처 · {report.performance_weights_source === 'user_custom' ? '사용자 직접 설정' : '기본 전략'}</span>
+        </div>
+        <dl>
+          {performanceGroups.map(({ key, label }) => (
+            <div key={key}><dt>{label}</dt><dd>{(report.performance_group_weights[key] * 100).toFixed(1)}%</dd></div>
+          ))}
+        </dl>
+      </section>
+
       <div className="report-area-grid">
         {report.areas.map((area) => (
           <article className="report-area-card" key={area.area_code}>
@@ -69,6 +82,20 @@ export function RecommendationReportView({ report }: Props) {
                 확인 · {area.negative_reasons.slice(0, 2).map((reason) => `${reason.factor} ${reason.fit_score.toFixed(1)}점`).join(', ')}
               </p>
             )}
+            <div className="report-performance-breakdown">
+              <strong>성과 그룹 기여도</strong>
+              {performanceGroups.map(({ key, label }) => {
+                const group = area.performance_breakdown[key]
+                return (
+                  <div key={key} className={!group.available ? 'missing' : ''}>
+                    <span>{label}</span>
+                    <span>{group.available && group.score != null ? `${group.score.toFixed(1)}점` : '자료 없음'}</span>
+                    <span>실효 {(group.effective_weight * 100).toFixed(1)}%</span>
+                    <b>{group.contribution.toFixed(1)}점 기여</b>
+                  </div>
+                )
+              })}
+            </div>
           </article>
         ))}
       </div>

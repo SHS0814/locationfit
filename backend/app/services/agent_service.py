@@ -82,6 +82,8 @@ SYSTEM_INSTRUCTIONS = """
 21. 통계 후속 답변은 verified_active_market_lookup의 filters와 geographic_basis를 그대로 따른다. 현재 조회에 없는 행정동·법정동·다른 지역 기준을 일반론으로 덧붙이지 않는다.
 22. 통계 후속 질문이 직전 결과에 없는 다른 지표(매출, 점포 수·밀도, 성장률, 폐업률, 개업률, 인구)를 요구하면 query_market_rankings를 반드시 다시 호출한다. 직전 조회의 지역 필터를 유지하고, '그 업종'·'1위 업종'은 verified_active_market_lookup.rows의 해당 entity_code를 industry_code로 사용한다.
 23. 특정 업종의 값을 묻는 경우 group_by=industry, industry_code=해당 업종, top_n=1로 조회한다. 특정 업종이 많은 상권을 묻는 경우 group_by=area와 해당 industry_code를 사용한다. 도구로 조회 가능한 지표에 대해 '현재 결과에 없다'고 답하고 끝내지 않는다.
+24. 사용자가 성장성·규모생산성·안정성·경쟁 여건·폐업 위험의 중요도를 말하면 performance_group_weights 5개 키를 모두 채운 초안을 만든다. 숫자가 없으면 의미에 맞는 보수적 비중을 제안하되 합계 기준으로 정규화 가능한 값만 사용한다.
+25. performance_group_weights를 새로 만들거나 바꾼 경우 서비스가 추천 도구를 즉시 실행한다. 적용한 5개 비중과 추천 결과를 간단히 설명하고, 사용자가 화면에서 비중을 다시 수정할 수 있다고 안내한다. 점수나 지표 값은 직접 계산하지 않는다.
 
 출력은 AgentDecision 스키마를 정확히 따른다. comparison_area_codes에는 실제 비교 도구로 조회한 코드만 넣는다.
 """.strip()
@@ -244,6 +246,7 @@ class OpenAIAgentRunner:
             "age_groups": metadata["age_groups"],
             "time_bands": metadata["time_bands"],
             "rent_floors": metadata["rent_floors"],
+            "performance_weight_presets": metadata["performance_weight_presets"],
         }
         run_input = json.dumps(
             {
@@ -462,6 +465,38 @@ class LocationAgentService:
                 assumptions=assumptions,
                 missing_fields=self._missing_fields(draft),
                 analysis_revision=payload.analysis_revision,
+            )
+
+        custom_weights_pending = (
+            draft.performance_group_weights is not None
+            and (
+                payload.active_recommendation_request is None
+                or draft.performance_group_weights
+                != payload.active_recommendation_request.performance_group_weights
+            )
+        )
+        if custom_weights_pending:
+            recommendations, diagnostics, report = self.recommender.recommend_with_report(
+                draft.to_request()
+            )
+            return self._response(
+                assistant_message=(
+                    self._performance_applied_message(draft)
+                    + " "
+                    + self._recommendation_summary(report)
+                    + " 성과 평가 기준은 조건 수정 화면에서 다시 조정할 수 있습니다."
+                ),
+                phase="results",
+                draft=draft,
+                context=context,
+                assumptions=assumptions,
+                missing_fields=[],
+                recommendations=recommendations,
+                diagnostics=diagnostics,
+                recommendation_report=report,
+                selected_scenario_id=payload.selected_scenario_id,
+                analysis_revision=payload.analysis_revision + 1,
+                active_recommendation_request=draft.to_request(),
             )
 
         exploration, scenarios, tradeoffs, relaxations = self._explore(draft)
@@ -721,7 +756,38 @@ class LocationAgentService:
             value = float(getattr(draft, field_name))
             if value > 0:
                 parts.append(f"{label} {value:.1f}")
+        if draft.performance_group_weights is not None:
+            weights = draft.performance_group_weights.model_dump()
+            parts.append(
+                "성과 기준 "
+                + ", ".join(
+                    f"{label} {weights[key] / sum(weights.values()) * 100:.0f}%"
+                    for key, label in (
+                        ("scale_productivity", "규모·생산성"),
+                        ("growth", "성장성"),
+                        ("stability", "안정성"),
+                        ("competition", "경쟁 여건"),
+                        ("closure_risk", "폐업 위험"),
+                    )
+                )
+            )
         return " · ".join(parts)
+
+    @staticmethod
+    def _performance_applied_message(draft: RecommendationDraft) -> str:
+        assert draft.performance_group_weights is not None
+        weights = draft.performance_group_weights.model_dump()
+        total = sum(weights.values())
+        labels = (
+            ("scale_productivity", "규모·생산성"),
+            ("growth", "성장성"),
+            ("stability", "안정성"),
+            ("competition", "경쟁 여건"),
+            ("closure_risk", "폐업 위험"),
+        )
+        lines = ["업종 성과 기준을 다음과 같이 적용해 바로 분석했습니다."]
+        lines.extend(f"- {label} {weights[key] / total * 100:.0f}%" for key, label in labels)
+        return "\n".join(lines)
 
     @staticmethod
     def _strategy_label(strategy: str) -> str:

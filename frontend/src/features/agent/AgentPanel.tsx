@@ -8,7 +8,9 @@ import type {
   RecommendationDraft,
   FloorType,
 } from '../../types/api'
+import { MarkdownContent } from '../../components/MarkdownContent'
 import { isDraftReady, toggleDraftValue } from './model'
+import { PerformanceWeightsControl } from '../recommendation/PerformanceWeightsControl'
 
 interface Props {
   metadata: MetadataResponse
@@ -85,7 +87,9 @@ export function AgentPanel({
         {history.map((item, index) => (
           <div key={`${item.role}-${index}`} className={`chat-message ${item.role}`}>
             <span>{item.role === 'assistant' ? 'AI' : '나'}</span>
-            <p>{item.content}</p>
+            {item.role === 'assistant'
+              ? <MarkdownContent content={item.content} />
+              : <p>{item.content}</p>}
           </div>
         ))}
         {loading && <div className="chat-message assistant pending"><span>AI</span><p>다음 단계에 필요한 데이터와 분석 도구를 확인하고 있어요…</p></div>}
@@ -122,6 +126,12 @@ export function AgentPanel({
               {metadata.industries.map((option) => <option key={option.code} value={option.code}>{option.name}</option>)}
             </select>
           </label>
+
+          <PerformanceWeightsControl
+            metadata={metadata}
+            value={draft.performance_group_weights}
+            onChange={(weights) => update('performance_group_weights', weights)}
+          />
 
           <div className="budget-rent-card">
             <div className="section-title"><span>예산·예상 임대료</span><small>선택 입력</small></div>
@@ -192,7 +202,7 @@ export function AgentPanel({
             </div>
           </div>
 
-          <button className="confirm-button" type="button" onClick={onConfirm} disabled={loading || !isDraftReady(draft) || !selectedScenarioId}>
+          <button className="confirm-button" type="button" onClick={onConfirm} disabled={loading || !isDraftReady(draft) || (!selectedScenarioId && draft.performance_group_weights == null)}>
             이 조건으로 분석
           </button>
           {dataGaps.map((gap) => <small className="data-gap" key={gap.code}>{gap.message}</small>)}

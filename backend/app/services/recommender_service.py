@@ -22,7 +22,7 @@ from backend.app.services.market_lookup_service import (
     MarketLookupService,
 )
 from backend.recommender import AreaRecommender, RecommendationRequest
-from src.models.area_recommender import RecommendationResult
+from src.models.area_recommender import RecommendationResult, STRATEGY_GROUP_WEIGHTS
 
 
 AGE_OPTIONS = [
@@ -128,6 +128,11 @@ class RecommenderService:
             "age_groups": AGE_OPTIONS,
             "time_bands": TIME_OPTIONS,
             "rent_floors": self.cost_provider.options(),
+            "performance_weight_presets": {
+                "balanced": dict(STRATEGY_GROUP_WEIGHTS["balanced"]),
+                "growth_focused": dict(STRATEGY_GROUP_WEIGHTS["growth"]),
+                "stability_focused": dict(STRATEGY_GROUP_WEIGHTS["stability"]),
+            },
         }
 
     def market_geographies(
@@ -201,6 +206,8 @@ class RecommenderService:
                 "strategy": payload.strategy,
                 "final_weights": diagnostics.get("final_weights", {}),
                 "evidence_group_weights": diagnostics.get("evidence_group_weights", {}),
+                "performance_group_weights": diagnostics.get("performance_group_weights", {}),
+                "performance_weights_source": diagnostics.get("performance_weights_source"),
                 "condition_fit": "사용자가 지정한 고객·시간·입지 특성과 상권 구조의 가중 거리 기반 적합도",
                 "performance_evidence": "동일 업종 내 관측 성과를 백분위화한 뒤 데이터 신뢰도에 따라 업종 평균 쪽으로 보정",
                 "budget_adjustment": (
@@ -364,6 +371,7 @@ class RecommenderService:
                 "positive_reasons": json.loads(row["positive_reasons"]),
                 "negative_reasons": json.loads(row["negative_reasons"]),
                 "evidence_summary": _json_safe(json.loads(row["evidence_summary"])),
+                "performance_breakdown": _json_safe(row["performance_breakdown"]),
                 "warnings": json.loads(row["warning_messages"]),
                 "rental_estimate": estimate.to_dict() if estimate is not None else None,
             })
@@ -483,6 +491,7 @@ class RecommenderService:
                 "positive_reasons": item["positive_reasons"],
                 "negative_reasons": item["negative_reasons"],
                 "warnings": item["warnings"],
+                "performance_breakdown": item["performance_breakdown"],
             }))
 
         data_period = self.manifest.get("data_period", {})
@@ -495,6 +504,8 @@ class RecommenderService:
             "competition_reference_period": competition_reference_period,
             "rental_estimate_basis": rental_basis,
             "rental_estimate_uses_default": not has_rent_conditions,
+            "performance_group_weights": result.diagnostics["performance_group_weights"],
+            "performance_weights_source": result.diagnostics["performance_weights_source"],
             "benchmark": benchmark,
             "areas": areas,
         }

@@ -15,6 +15,9 @@ def test_health_metadata_and_recommendation_contract() -> None:
             {"code": "f1", "name": "1층"},
             {"code": "non_f1", "name": "1층 외"},
         ]
+        assert set(metadata.json()["performance_weight_presets"]) == {
+            "balanced", "growth_focused", "stability_focused",
+        }
 
         response = client.post(
             "/api/v1/recommendations",
@@ -29,6 +32,35 @@ def test_health_metadata_and_recommendation_contract() -> None:
         body = response.json()
         assert len(body["recommendations"]) == 3
         assert body["request_id"] == response.headers["x-request-id"]
+        assert body["diagnostics"]["performance_weights_source"] == "strategy_default"
+        assert len(body["recommendations"][0]["performance_breakdown"]) == 5
+
+
+def test_custom_performance_weights_api_contract() -> None:
+    with TestClient(app) as client:
+        payload = {
+            "industry_code": "CS100010",
+            "top_n": 3,
+            "performance_group_weights": {
+                "scale_productivity": 20,
+                "growth": 40,
+                "stability": 20,
+                "competition": 5,
+                "closure_risk": 15,
+            },
+        }
+        response = client.post("/api/v1/recommendations", json=payload)
+        assert response.status_code == 200
+        diagnostics = response.json()["diagnostics"]
+        assert diagnostics["performance_weights_source"] == "user_custom"
+        assert diagnostics["performance_group_weights"]["growth"] == 0.4
+
+        partial = client.post("/api/v1/recommendations", json={
+            "industry_code": "CS100010",
+            "performance_group_weights": {"growth": 1},
+        })
+        assert partial.status_code == 422
+        assert partial.json()["error"]["code"] == "REQUEST_SCHEMA_VALIDATION_FAILED"
 
 
 def test_request_accepts_industry_only_as_unrestricted_scope() -> None:

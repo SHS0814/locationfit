@@ -20,8 +20,10 @@ import type {
   WorkspaceAgentScope,
 } from '../../types/api'
 import type { LeaseCandidateFinanceState, LeaseCandidateRecord } from '../finance/model'
+import { normalizePerformanceWeights } from '../recommendation/performanceWeights'
 
-export const AGENT_SESSION_KEY = 'kb-location-agent-session-v8'
+export const AGENT_SESSION_KEY = 'kb-location-agent-session-v9'
+export const AGENT_V8_SESSION_KEY = 'kb-location-agent-session-v8'
 export const AGENT_V7_SESSION_KEY = 'kb-location-agent-session-v7'
 export const AGENT_V6_SESSION_KEY = 'kb-location-agent-session-v6'
 export const AGENT_V5_SESSION_KEY = 'kb-location-agent-session-v5'
@@ -54,6 +56,7 @@ export const emptyDraft: RecommendationDraft = {
   min_data_reliability: 0,
   top_n: 10,
   strategy: 'balanced',
+  performance_group_weights: null,
   total_startup_budget_krw: null,
   monthly_converted_rent_limit_krw: null,
   rentable_area_sqm: null,
@@ -86,7 +89,7 @@ export function createInitialWorkspaceChats(): WorkspaceChats {
 }
 
 export interface AgentSession {
-  schemaVersion: 8
+  schemaVersion: 9
   history: AgentMessage[]
   draft: RecommendationDraft
   phase: AgentPhase
@@ -144,7 +147,7 @@ export interface AgentBriefing {
 }
 
 export const initialSession: AgentSession = {
-  schemaVersion: 8,
+  schemaVersion: 9,
   history: initialMessages,
   draft: emptyDraft,
   phase: 'discovering',
@@ -285,7 +288,9 @@ export function isDraftReady(draft: RecommendationDraft): boolean {
   const hasAllRentFields = rentFields.every((value) => value != null)
   const rentReady = (!hasAnyRentField || hasAllRentFields)
     && (draft.monthly_converted_rent_limit_krw == null || hasAllRentFields)
-  return Boolean(draft.industry_code) && rentReady
+  const performanceReady = draft.performance_group_weights == null
+    || normalizePerformanceWeights(draft.performance_group_weights) != null
+  return Boolean(draft.industry_code) && rentReady && performanceReady
 }
 
 export function deriveAgentCommandStages(session: AgentSession, loading = false): AgentCommandStage[] {
@@ -407,8 +412,9 @@ export function restoreSession(raw: string | null): AgentSession {
     const parsed = JSON.parse(raw) as Partial<AgentSession>
     if (!Array.isArray(parsed.history) || !parsed.draft || !parsed.phase) return initialSession
     const parsedVersion = Number((parsed as { schemaVersion?: unknown }).schemaVersion)
-    const currentSchema = parsedVersion === 8
-    const analysisCompatible = currentSchema || parsedVersion === 7
+    const currentSchema = parsedVersion === 9
+    const workspaceCompatible = currentSchema || parsedVersion === 8
+    const analysisCompatible = currentSchema
     const legacyDraft = parsed.draft as Partial<RecommendationDraft> & { commercial_property_type?: unknown; floor?: string | null }
     const { commercial_property_type: _removedPropertyType, ...draftValues } = legacyDraft
     const floor = legacyDraft.floor && ['all', 'f1', 'non_f1'].includes(legacyDraft.floor)
@@ -426,7 +432,7 @@ export function restoreSession(raw: string | null): AgentSession {
       ? Math.min(Math.max(Number.isInteger(storedLookupIndex) ? storedLookupIndex : marketLookupHistory.length - 1, 0), marketLookupHistory.length - 1)
       : -1
     return {
-      schemaVersion: 8,
+      schemaVersion: 9,
       history: parsed.history.slice(-20),
       draft: { ...emptyDraft, ...draftValues, floor },
       phase: !analysisCompatible || parsed.phase === ('gathering' as AgentPhase) ? 'discovering' : parsed.phase,
@@ -454,12 +460,12 @@ export function restoreSession(raw: string | null): AgentSession {
         : ['competitor', 'complementary', 'daily_life', 'other'],
       storeSearch: analysisCompatible && typeof parsed.storeSearch === 'string' ? parsed.storeSearch : '',
       webResearch: analysisCompatible && Array.isArray(parsed.webResearch) ? parsed.webResearch : [],
-      leaseCandidates: currentSchema && Array.isArray(parsed.leaseCandidates) ? parsed.leaseCandidates : [],
-      leaseFinanceById: currentSchema ? restoreLeaseFinanceStates(parsed.leaseFinanceById) : {},
-      selectedLeaseCandidateId: currentSchema && typeof parsed.selectedLeaseCandidateId === 'string'
+      leaseCandidates: workspaceCompatible && Array.isArray(parsed.leaseCandidates) ? parsed.leaseCandidates : [],
+      leaseFinanceById: workspaceCompatible ? restoreLeaseFinanceStates(parsed.leaseFinanceById) : {},
+      selectedLeaseCandidateId: workspaceCompatible && typeof parsed.selectedLeaseCandidateId === 'string'
         ? parsed.selectedLeaseCandidateId : null,
-      financeAreaCode: currentSchema && typeof parsed.financeAreaCode === 'string' ? parsed.financeAreaCode : null,
-      workspaceChats: currentSchema && parsed.workspaceChats && typeof parsed.workspaceChats === 'object'
+      financeAreaCode: workspaceCompatible && typeof parsed.financeAreaCode === 'string' ? parsed.financeAreaCode : null,
+      workspaceChats: workspaceCompatible && parsed.workspaceChats && typeof parsed.workspaceChats === 'object'
         ? {
             stores: Array.isArray(parsed.workspaceChats.stores) ? parsed.workspaceChats.stores.slice(-20) : createInitialWorkspaceChats().stores,
             finance: Array.isArray(parsed.workspaceChats.finance) ? parsed.workspaceChats.finance.slice(-20) : createInitialWorkspaceChats().finance,

@@ -75,6 +75,24 @@ class IncompleteRunner:
         ))
 
 
+class PerformanceWeightsRunner:
+    async def run(self, payload, recommender, metadata) -> AgentExecution:
+        return AgentExecution(AgentDecision(
+            assistant_message="성과 기준 초안을 만들었습니다.",
+            draft=RecommendationDraft(
+                industry_code="CS100001",
+                top_n=3,
+                performance_group_weights={
+                    "scale_productivity": 15,
+                    "growth": 45,
+                    "stability": 15,
+                    "competition": 5,
+                    "closure_risk": 20,
+                },
+            ),
+        ))
+
+
 class MarketLookupRunner:
     async def run(self, payload, recommender, metadata) -> AgentExecution:
         lookup = recommender.lookup_market_rankings(
@@ -143,6 +161,22 @@ def test_missing_optional_conditions_are_immediately_treated_as_broad_scope() ->
         item for item in result["assumptions"] if item.id == "broad_customer_age"
     )
     assert "10대·20대·30대·40대·50대·60대 이상 전체" in age_assumption.text
+
+
+def test_natural_language_performance_weights_run_recommendation_immediately() -> None:
+    service = LocationAgentService(
+        RecommenderService(ARTIFACT_DIR), PerformanceWeightsRunner(), timeout_seconds=1,
+    )
+    result = asyncio.run(service.turn(AgentTurnRequest(
+        message="성장성을 가장 중요하게 보고 폐업 위험도 고려해줘",
+    )))
+
+    assert result["phase"] == "results"
+    assert len(result["recommendations"]) == 3
+    assert "성장성 45%" in result["assistant_message"]
+    assert "폐업 위험 20%" in result["assistant_message"]
+    assert "바로 분석" in result["assistant_message"]
+    assert result["diagnostics"]["performance_weights_source"] == "user_custom"
 
 
 def test_explicit_conditions_are_preserved_without_broad_assumption_for_that_field() -> None:

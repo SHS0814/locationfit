@@ -38,14 +38,15 @@ describe('agent session model', () => {
       activeRequest: draftToRequest(draft),
     }))
     expect(restored.draft.industry_code).toBe('CS100001')
-    expect(restored.schemaVersion).toBe(8)
+    expect(restored.schemaVersion).toBe(9)
     expect(restored.recommendationReport).toBeNull()
     expect(restored.context.discovery_question_count).toBe(0)
     expect(restored.storeRelations).toEqual(['competitor', 'complementary', 'daily_life', 'other'])
     expect(restored.leaseCandidates).toEqual([])
     expect(restored.marketLookupHistory).toEqual([])
     expect(restored.marketLookupIndex).toBe(-1)
-    expect(restored.phase).toBe('ready_for_confirmation')
+    expect(restored.phase).toBe('discovering')
+    expect(restored.draft.performance_group_weights).toBeNull()
     expect(restoreSession('{broken').phase).toBe('discovering')
   })
 
@@ -60,7 +61,7 @@ describe('agent session model', () => {
       activeRequest: draftToRequest(draft),
     }))
     expect(restored.items).toEqual([])
-    expect(restored.activeRequest?.industry_code).toBe('CS100001')
+    expect(restored.activeRequest).toBeNull()
   })
 
   it('restores v8 lease candidates and their finance state', () => {
@@ -126,6 +127,16 @@ describe('agent session model', () => {
 
   it('keeps an industry-only draft ready after strategy selection', () => {
     expect(isDraftReady({ ...emptyDraft, industry_code: 'CS100001', strategy: 'growth' })).toBe(true)
+  })
+
+  it('includes normalized custom performance weights in the API payload and blocks all-zero weights', () => {
+    const weights = { scale_productivity: 0.2, growth: 0.4, stability: 0.2, competition: 0.05, closure_risk: 0.15 }
+    const draft = { ...emptyDraft, industry_code: 'CS100001', performance_group_weights: weights }
+    expect(draftToRequest(draft).performance_group_weights).toEqual(weights)
+    expect(isDraftReady({
+      ...draft,
+      performance_group_weights: { scale_productivity: 0, growth: 0, stability: 0, competition: 0, closure_risk: 0 },
+    })).toBe(false)
   })
 
   it('requires complete rent conditions only when a monthly cap is used', () => {
@@ -214,6 +225,8 @@ describe('agent session model', () => {
         competition_reference_period: '2025Q4',
         rental_estimate_basis: '입력 조건 기준',
         rental_estimate_uses_default: false,
+        performance_group_weights: { scale_productivity: 0.35, growth: 0.27, stability: 0.18, competition: 0.08, closure_risk: 0.12 },
+        performance_weights_source: 'strategy_default',
         benchmark: {} as NonNullable<typeof session.recommendationReport>['benchmark'],
         areas: [{
           area_code: 'A1',
@@ -230,6 +243,7 @@ describe('agent session model', () => {
           positive_reasons: [{ factor: '주말 유동', feature: 'weekend', fit_score: 94, weight: 0.8 }],
           negative_reasons: [],
           warnings: [],
+          performance_breakdown: {} as NonNullable<typeof session.recommendationReport>['areas'][number]['performance_breakdown'],
         }],
       },
     })
@@ -266,6 +280,7 @@ describe('agent session model', () => {
       positive_reasons: [],
       negative_reasons: [],
       evidence_summary: {},
+      performance_breakdown: {} as Parameters<typeof createDemoLeaseCandidate>[0]['performance_breakdown'],
       warnings: [],
       rental_estimate: null,
     })
@@ -286,7 +301,7 @@ describe('agent session model', () => {
       draft: { ...emptyDraft, commercial_property_type: 'small_retail', floor: 'f2' },
       phase: 'results',
     }))
-    expect(restored.schemaVersion).toBe(8)
+    expect(restored.schemaVersion).toBe(9)
     expect(restored.draft.floor).toBeNull()
     expect('commercial_property_type' in restored.draft).toBe(false)
     expect(restored.phase).toBe('discovering')

@@ -12,6 +12,7 @@ import { WorkspaceAgentPanel } from './features/agent/WorkspaceAgentPanel'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
+  AGENT_V8_SESSION_KEY,
   AGENT_V7_SESSION_KEY,
   AGENT_V6_SESSION_KEY,
   AGENT_V5_SESSION_KEY,
@@ -59,6 +60,7 @@ export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)
+      || sessionStorage.getItem(AGENT_V8_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V7_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V6_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V5_SESSION_KEY)
@@ -160,7 +162,7 @@ export default function App() {
         ? [...session.marketLookupHistory, response.market_lookup].slice(-20)
         : session.marketLookupHistory
       const nextSession: AgentSession = {
-        schemaVersion: 8,
+        schemaVersion: 9,
         history: [...visibleHistory, { role: 'assistant' as const, content: response.assistant_message }].slice(-20),
         draft: response.draft,
         phase: isMarketLookup ? session.phase : response.phase,
@@ -403,7 +405,9 @@ export default function App() {
 
   const confirm = () => {
     if (!isDraftReady(session.draft)) return setError('업종과 희망 조건을 먼저 알려주세요.')
-    if (!session.selectedScenarioId) return setError('세 가지 전략 중 하나를 먼저 선택해주세요.')
+    if (!session.selectedScenarioId && session.draft.performance_group_weights == null) {
+      return setError('세 가지 전략 중 하나를 먼저 선택해주세요.')
+    }
     return executeTurn({
       action: 'confirm_recommendation',
       message: '조건 카드를 확인했습니다. 이 조건으로 추천을 실행해주세요.',
@@ -452,6 +456,7 @@ export default function App() {
   const resetConversationAndAnalysis = () => {
     if (!window.confirm('대화와 모든 분석 결과를 초기화할까요?')) return
     sessionStorage.removeItem(AGENT_SESSION_KEY)
+    sessionStorage.removeItem(AGENT_V8_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V7_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V6_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V5_SESSION_KEY)

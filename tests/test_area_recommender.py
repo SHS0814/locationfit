@@ -10,8 +10,10 @@ from src.models.area_recommender import (
     AreaRecommender,
     EVIDENCE_WEIGHTS,
     RecommendationRequest,
+    STRATEGY_GROUP_WEIGHTS,
     build_preference_features,
     score_industry_evidence,
+    normalize_performance_weights,
     strategy_evidence_weights,
     validate_request,
     weighted_euclidean_scores,
@@ -74,6 +76,82 @@ def synthetic_recommender() -> AreaRecommender:
 
 
 class AreaRecommenderTests(unittest.TestCase):
+    def test_performance_weight_normalization_and_validation(self) -> None:
+        unit = {
+            "scale_productivity": 0.2, "growth": 0.4, "stability": 0.2,
+            "competition": 0.05, "closure_risk": 0.15,
+        }
+        percent = {key: value * 100 for key, value in unit.items()}
+        arbitrary = {key: value * 7.3 for key, value in unit.items()}
+        self.assertEqual(normalize_performance_weights(unit), unit)
+        for supplied in (percent, arbitrary):
+            normalized = normalize_performance_weights(supplied)
+            self.assertAlmostEqual(sum(normalized.values()), 1.0)
+            for key in unit:
+                self.assertAlmostEqual(normalized[key], unit[key])
+
+        invalid = [
+            {**unit, "growth": -1},
+            {key: 0 for key in unit},
+            {**unit, "growth": np.nan},
+            {**unit, "growth": np.inf},
+            {**unit, "unknown": 1},
+            {key: value for key, value in unit.items() if key != "growth"},
+        ]
+        for weights in invalid:
+            with self.subTest(weights=weights), self.assertRaises(ValueError):
+                normalize_performance_weights(weights)
+
+    def test_default_and_explicit_default_weights_are_identical(self) -> None:
+        evidence = synthetic_recommender().evidence
+        implicit = score_industry_evidence(evidence, strategy="balanced")
+        explicit = score_industry_evidence(
+            evidence,
+            strategy="balanced",
+            performance_group_weights=STRATEGY_GROUP_WEIGHTS["balanced"],
+        )
+        self.assertTrue(np.allclose(implicit["raw_evidence_score"], explicit["raw_evidence_score"]))
+
+    def test_missing_group_is_renormalized_and_contributions_match_raw_score(self) -> None:
+        evidence = synthetic_recommender().evidence.copy()
+        evidence.loc[5, ["sales_coefficient_of_variation", "decline_quarter_ratio"]] = np.nan
+        weights = {
+            "scale_productivity": 20, "growth": 40, "stability": 20,
+            "competition": 10, "closure_risk": 10,
+        }
+        scored = score_industry_evidence(evidence, performance_group_weights=weights)
+        breakdown = scored.loc[5, "performance_breakdown"]
+        self.assertFalse(breakdown["stability"]["available"])
+        self.assertEqual(breakdown["stability"]["effective_weight"], 0)
+        self.assertAlmostEqual(
+            sum(group["effective_weight"] for group in breakdown.values()),
+            1.0,
+        )
+        self.assertAlmostEqual(
+            sum(group["contribution"] for group in breakdown.values()),
+            scored.loc[5, "raw_evidence_score"],
+            places=5,
+        )
+
+    def test_custom_growth_and_risk_weights_change_conflicting_scores(self) -> None:
+        evidence = synthetic_recommender().evidence.copy()
+        for metric in EVIDENCE_WEIGHTS:
+            evidence[metric] = 0.5
+        evidence.loc[3, ["yoy_growth_rate", "recent_4q_growth_rate", "long_term_sales_trend_slope", "net_store_growth_rate"]] = 1.0
+        evidence.loc[3, ["closing_rate", "churn_rate", "recent_closure_rate_increase"]] = 1.0
+        evidence.loc[4, ["yoy_growth_rate", "recent_4q_growth_rate", "long_term_sales_trend_slope", "net_store_growth_rate"]] = 0.0
+        evidence.loc[4, ["closing_rate", "churn_rate", "recent_closure_rate_increase"]] = 0.0
+        growth = score_industry_evidence(evidence, performance_group_weights={
+            "scale_productivity": 0, "growth": 1, "stability": 0,
+            "competition": 0, "closure_risk": 0,
+        })
+        risk = score_industry_evidence(evidence, performance_group_weights={
+            "scale_productivity": 0, "growth": 0, "stability": 0,
+            "competition": 0, "closure_risk": 1,
+        })
+        self.assertGreater(growth.loc[3, "raw_evidence_score"], growth.loc[4, "raw_evidence_score"])
+        self.assertLess(risk.loc[3, "raw_evidence_score"], risk.loc[4, "raw_evidence_score"])
+
     def test_user_input_validation(self) -> None:
         validate_request(RecommendationRequest(industry_code="i1"), valid_industries={"i1"})
         with self.assertRaisesRegex(ValueError, "존재하지 않는"):
@@ -187,6 +265,27 @@ class AreaRecommenderTests(unittest.TestCase):
         second = engine.recommend(request, k=10).recommendations
         self.assertEqual(first["area_code"].tolist(), second["area_code"].tolist())
         self.assertTrue(np.allclose(first["final_score"], second["final_score"]))
+
+    def test_custom_weights_are_reported_in_diagnostics(self) -> None:
+        engine = synthetic_recommender()
+        request = RecommendationRequest(
+            industry_code="i1",
+            top_n=3,
+            performance_group_weights={
+                "scale_productivity": 20, "growth": 40, "stability": 20,
+                "competition": 5, "closure_risk": 15,
+            },
+        )
+        result = engine.recommend(request, k=10)
+        self.assertEqual(result.diagnostics["performance_weights_source"], "user_custom")
+        self.assertAlmostEqual(sum(result.diagnostics["performance_group_weights"].values()), 1.0)
+        for _, row in result.recommendations.iterrows():
+            breakdown = row["performance_breakdown"]
+            self.assertAlmostEqual(
+                sum(group["contribution"] for group in breakdown.values()),
+                row["raw_evidence_score"],
+                places=5,
+            )
 
 
 if __name__ == "__main__":
