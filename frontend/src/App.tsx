@@ -38,7 +38,7 @@ import { LeasePlanCard } from './features/recommendation/LeasePlanCard'
 import { AreaStoreExplorer } from './features/stores/AreaStoreExplorer'
 import { LeaseCandidateEditor } from './features/finance/LeaseCandidateEditor'
 import { LeaseCandidateWorkspace } from './features/finance/LeaseCandidateWorkspace'
-import { emptyFinanceState, hasDuplicateSourceUrl, type LeaseCandidateFinanceState, type LeaseCandidateRecord } from './features/finance/model'
+import { emptyFinanceState, type LeaseCandidateFinanceState, type LeaseCandidateRecord } from './features/finance/model'
 import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption, StoreRelation, WorkspaceAgentScope } from './types/api'
 
 type RecommendationPage = 'analysis' | WorkspaceAgentScope
@@ -614,9 +614,6 @@ export default function App() {
   }
 
   const saveLeaseCandidate = (candidate: LeaseCandidateRecord): string | null => {
-    if (hasDuplicateSourceUrl(session.leaseCandidates, candidate)) {
-      return '같은 원본 URL의 매물이 이미 후보함에 있습니다. 기존 후보를 편집해주세요.'
-    }
     setSession((current) => {
       const exists = current.leaseCandidates.some((item) => item.id === candidate.id)
       return {

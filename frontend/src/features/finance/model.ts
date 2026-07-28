@@ -1,11 +1,9 @@
-import type { FinancePlanRequest, FinancePlanResponse, LeaseCandidateExtractResponse, RecommendationItem } from '../../types/api'
+import type { FinancePlanRequest, FinancePlanResponse, RecommendationItem } from '../../types/api'
 
 export type LeaseMoneyField = 'deposit' | 'monthlyRent' | 'managementFee' | 'keyMoney'
 export type StartupMoneyField = 'interior' | 'equipment' | 'inventory' | 'workingCapital' | 'other' | 'ownCapital'
 
 export interface LeaseCandidateDraft {
-  sourceUrl: string
-  sourceText: string
   title: string
   address: string
   areaSqm: string
@@ -44,7 +42,7 @@ export interface LeaseCandidateFinanceState {
 }
 
 export const emptyLeaseDraft = (): LeaseCandidateDraft => ({
-  sourceUrl: '', sourceText: '', title: '', address: '', areaSqm: '', floor: '',
+  title: '', address: '', areaSqm: '', floor: '',
   money: { deposit: '', monthlyRent: '', managementFee: '', keyMoney: '' },
   notes: null, warnings: [],
 })
@@ -74,29 +72,9 @@ export function manwonToNullableKrw(value: string): number | null {
   return value.trim() === '' ? null : manwonToKrw(value)
 }
 
-export function draftFromExtraction(response: LeaseCandidateExtractResponse, current: LeaseCandidateDraft): LeaseCandidateDraft {
-  const item = response.extracted
-  return {
-    ...current,
-    title: item.listing_title || '',
-    address: item.address || '',
-    areaSqm: item.rentable_area_sqm == null ? '' : String(item.rentable_area_sqm),
-    floor: item.floor || '',
-    money: {
-      deposit: krwToManwon(item.deposit_krw),
-      monthlyRent: krwToManwon(item.monthly_rent_krw),
-      managementFee: krwToManwon(item.management_fee_krw),
-      keyMoney: krwToManwon(item.key_money_krw),
-    },
-    notes: item.notes,
-    warnings: response.warnings,
-  }
-}
-
 export function draftFromCandidate(candidate: LeaseCandidateRecord): LeaseCandidateDraft {
   return {
-    sourceUrl: candidate.sourceUrl || '', sourceText: '', title: candidate.title,
-    address: candidate.address,
+    title: candidate.title, address: candidate.address,
     areaSqm: candidate.rentableAreaSqm == null ? '' : String(candidate.rentableAreaSqm),
     floor: candidate.floor || '',
     money: {
@@ -110,38 +88,10 @@ export function draftFromCandidate(candidate: LeaseCandidateRecord): LeaseCandid
 }
 
 export function validateLeaseDraft(draft: LeaseCandidateDraft): string | null {
-  if (draft.sourceUrl.trim()) {
-    try {
-      const parsed = new URL(draft.sourceUrl.trim())
-      if (!['http:', 'https:'].includes(parsed.protocol)) return 'http 또는 https 매물 URL을 입력해주세요.'
-    } catch {
-      return '매물 URL 형식을 확인해주세요.'
-    }
-  }
   if (!draft.address.trim()) return '매물 주소를 입력해주세요.'
   if (draft.money.deposit.trim() === '') return '보증금을 입력해주세요. 보증금이 없으면 0을 입력하세요.'
   if (draft.money.monthlyRent.trim() === '') return '월세를 입력해주세요. 월세가 없으면 0을 입력하세요.'
   return null
-}
-
-export function normalizeSourceUrl(value: string | null): string | null {
-  if (!value?.trim()) return null
-  try {
-    const parsed = new URL(value.trim())
-    parsed.hash = ''
-    if (parsed.pathname.length > 1) parsed.pathname = parsed.pathname.replace(/\/$/, '')
-    return parsed.toString()
-  } catch {
-    return value.trim()
-  }
-}
-
-export function hasDuplicateSourceUrl(candidates: LeaseCandidateRecord[], candidate: LeaseCandidateRecord): boolean {
-  const normalized = normalizeSourceUrl(candidate.sourceUrl)
-  return Boolean(normalized && candidates.some((item) => (
-    item.id !== candidate.id && item.areaCode === candidate.areaCode
-    && normalizeSourceUrl(item.sourceUrl) === normalized
-  )))
 }
 
 export function candidateFromDraft(
@@ -151,15 +101,12 @@ export function candidateFromDraft(
 ): LeaseCandidateRecord {
   const now = new Date().toISOString()
   const areaSqm = Number(draft.areaSqm)
-  const sourceUrl = draft.sourceUrl.trim() || null
-  const sourceKind = sourceUrl && draft.sourceText.trim() ? 'url_and_text'
-    : sourceUrl ? (existing?.sourceUrl === sourceUrl ? existing.sourceKind : 'url')
-      : draft.sourceText.trim() ? 'text' : existing?.sourceKind === 'text' ? 'text' : 'manual'
   return {
     id: existing?.id || globalThis.crypto?.randomUUID?.() || `lease-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     areaCode: area.area_code, areaName: area.area_name,
     industryCode: area.industry_code, industryName: area.industry_name,
-    sourceUrl, sourceKind,
+    sourceUrl: existing?.sourceUrl || null,
+    sourceKind: existing?.sourceKind || 'manual',
     title: draft.title.trim() || `${draft.address.trim()}${draft.floor.trim() ? ` ${draft.floor.trim()}` : ''}`,
     address: draft.address.trim(),
     depositKrw: manwonToKrw(draft.money.deposit),

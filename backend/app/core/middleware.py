@@ -58,7 +58,7 @@ class RecommendationRateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if request.url.path.endswith("/recommendations"):
             bucket, limit, code = "recommendations", self.limit, "RATE_LIMIT_EXCEEDED"
-        elif request.url.path.endswith(("/agent/turns", "/agent/workspace-turns", "/agent/web-research", "/lease-candidates/extract")):
+        elif request.url.path.endswith(("/agent/turns", "/agent/workspace-turns", "/agent/web-research")):
             bucket, limit, code = "agent", self.agent_limit, "AGENT_RATE_LIMIT_EXCEEDED"
         else:
             return await call_next(request)

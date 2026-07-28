@@ -228,34 +228,6 @@ export interface WebResearchResponse {
   warnings: string[]
 }
 
-export interface LeaseCandidateExtraction {
-  listing_title: string | null
-  address: string | null
-  deposit_krw: number | null
-  monthly_rent_krw: number | null
-  management_fee_krw: number | null
-  key_money_krw: number | null
-  rentable_area_sqm: number | null
-  floor: string | null
-  notes: string | null
-  missing_fields: string[]
-}
-
-export interface LeaseCandidateExtractRequest {
-  source_url: string | null
-  source_text: string | null
-  selected_area_name: string
-}
-
-export interface LeaseCandidateExtractResponse {
-  request_id: string
-  source_url: string | null
-  source_kind: 'url' | 'text' | 'url_and_text'
-  extracted: LeaseCandidateExtraction
-  warnings: string[]
-  requires_confirmation: boolean
-}
-
 export type FinancialVulnerability = 'low_credit' | 'basic_livelihood' | 'near_poverty' | 'earned_income_tax_credit' | 'none' | 'unknown'
 export type FinancialProductType = 'bank_loan' | 'policy_fund' | 'support_program' | 'guarantee'
 export type FinancialCatalogStatus = 'active' | 'upcoming' | 'unknown'

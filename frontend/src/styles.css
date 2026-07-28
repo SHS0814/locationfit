@@ -472,17 +472,11 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
 .lease-editor > header p { margin: 0; color: #77736c; font-size: 10px; }
 .lease-editor > header button { align-self: start; width: 34px; height: 34px; border: 1px solid #d8d4ca; border-radius: 50%; background: #fff; color: #5b5851; font-size: 21px; }
 .lease-editor-body { padding: 22px 26px; overflow-y: auto; }
-.lease-editor-body section { padding: 17px; border: 1px solid #dfdcd3; background: #faf9f5; }
-.lease-editor-body section + section { margin-top: 14px; background: #fff; }
+.lease-editor-body section { padding: 17px; border: 1px solid #dfdcd3; background: #fff; }
 .lease-editor-body h3 { margin: 0 0 13px; font-size: 13px; }
 .lease-editor-body h3 small { margin-left: 5px; color: #8a867d; font-size: 8px; font-weight: 500; }
-.lease-source-box > label { display: block; margin-top: 9px; }
-.lease-source-box label > span, .lease-editor-fields label > span { display: block; margin-bottom: 5px; color: #66635c; font-size: 9px; font-weight: 700; }
-.lease-source-box input, .lease-source-box textarea, .lease-editor-fields input { width: 100%; min-width: 0; border: 1px solid #d6d3ca; border-radius: 3px; background: #fff; color: #262622; font-size: 11px; }
-.lease-source-box input, .lease-editor-fields input { height: 38px; padding: 0 10px; }
-.lease-source-box textarea { padding: 9px 10px; resize: vertical; line-height: 1.5; }
-.lease-source-box > button { min-height: 35px; margin-top: 10px; padding: 0 12px; border: 0; border-radius: 3px; background: #26322c; color: #ffcf19; font-size: 10px; font-weight: 800; }
-.lease-source-box > button:disabled { opacity: .5; }
+.lease-editor-fields label > span { display: block; margin-bottom: 5px; color: #66635c; font-size: 9px; font-weight: 700; }
+.lease-editor-fields input { width: 100%; min-width: 0; height: 38px; padding: 0 10px; border: 1px solid #d6d3ca; border-radius: 3px; background: #fff; color: #262622; font-size: 11px; }
 .lease-editor-fields { display: grid; gap: 10px; }
 .lease-editor-fields.two { grid-template-columns: 1fr 1fr; }
 .lease-editor-fields.money { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 13px; }

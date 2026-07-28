@@ -33,7 +33,6 @@ class Settings:
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
     agent_timeout_seconds: float = float(os.getenv("AGENT_TIMEOUT_SECONDS", "30"))
     web_research_timeout_seconds: float = float(os.getenv("WEB_RESEARCH_TIMEOUT_SECONDS", "45"))
-    listing_extraction_timeout_seconds: float = float(os.getenv("LISTING_EXTRACTION_TIMEOUT_SECONDS", "30"))
     agent_max_turns: int = int(os.getenv("AGENT_MAX_TURNS", "4"))
     max_request_bytes: int = int(os.getenv("MAX_REQUEST_BYTES", str(32 * 1024)))
     data_go_kr_service_key: str = os.getenv("DATA_GO_KR_SERVICE_KEY", "")

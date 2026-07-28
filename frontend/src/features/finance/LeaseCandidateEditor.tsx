@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
-import { api } from '../../api/client'
 import type { RecommendationItem } from '../../types/api'
 import {
   candidateFromDraft,
   draftFromCandidate,
-  draftFromExtraction,
   emptyLeaseDraft,
   validateLeaseDraft,
   type LeaseCandidateDraft,
@@ -27,7 +25,6 @@ export function LeaseCandidateEditor({ area, existing, onClose, onSave }: {
   onSave: (candidate: LeaseCandidateRecord) => string | null
 }) {
   const [draft, setDraft] = useState<LeaseCandidateDraft>(() => existing ? draftFromCandidate(existing) : emptyLeaseDraft())
-  const [extracting, setExtracting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -40,27 +37,6 @@ export function LeaseCandidateEditor({ area, existing, onClose, onSave }: {
       ...current,
       money: { ...current.money, [key]: value.replace(/[^0-9.]/g, '') },
     }))
-  }
-
-  const extract = async () => {
-    if (!draft.sourceUrl.trim() && !draft.sourceText.trim()) {
-      setError('AI로 채우려면 매물 URL 또는 매물 설명을 입력해주세요.')
-      return
-    }
-    setExtracting(true)
-    setError(null)
-    try {
-      const response = await api.extractLeaseCandidate({
-        source_url: draft.sourceUrl.trim() || null,
-        source_text: draft.sourceText.trim() || null,
-        selected_area_name: area.area_name,
-      })
-      setDraft((current) => draftFromExtraction(response, current))
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '매물 정보를 추출하지 못했습니다.')
-    } finally {
-      setExtracting(false)
-    }
   }
 
   const save = () => {
@@ -81,15 +57,8 @@ export function LeaseCandidateEditor({ area, existing, onClose, onSave }: {
           <button type="button" onClick={onClose} aria-label="닫기">×</button>
         </header>
         <div className="lease-editor-body">
-          <section className="lease-source-box">
-            <h3>외부 매물에서 AI로 채우기 <small>선택</small></h3>
-            <label><span>매물 URL</span><input type="url" value={draft.sourceUrl} onChange={(event) => setDraft({ ...draft, sourceUrl: event.target.value })} placeholder="https://..." /></label>
-            <label><span>매물 설명</span><textarea rows={4} value={draft.sourceText} onChange={(event) => setDraft({ ...draft, sourceText: event.target.value })} placeholder="주소, 보증금/월세, 관리비, 권리금, 면적, 층 정보" /></label>
-            <button type="button" onClick={extract} disabled={extracting}>{extracting ? 'AI가 읽는 중…' : 'AI로 아래 항목 채우기'}</button>
-          </section>
-
-          <section className="lease-manual-box">
-            <h3>확인한 매물 정보 <small>직접 수정 가능</small></h3>
+          <section>
+            <h3>매물 정보</h3>
             <div className="lease-editor-fields two">
               <label><span>매물명</span><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="선택 입력" /></label>
               <label><span>주소 *</span><input value={draft.address} onChange={(event) => setDraft({ ...draft, address: event.target.value })} /></label>
@@ -101,7 +70,7 @@ export function LeaseCandidateEditor({ area, existing, onClose, onSave }: {
             </div>
             <p className="lease-zero-guide">관리비·권리금이 없다고 확인한 경우에는 빈칸 대신 0을 입력하세요.</p>
             <p className="lease-area-warning">이 주소가 선택한 {area.area_name} 검토 대상인지 직접 확인해주세요. 주변 영업 점포는 임대 가능 매물을 뜻하지 않습니다.</p>
-            {draft.notes && <p className="finance-note">AI 메모: {draft.notes}</p>}
+            {draft.notes && <p className="finance-note">메모: {draft.notes}</p>}
             {draft.warnings.length > 0 && <ul className="finance-disclosures">{draft.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
           </section>
           {error && <div className="finance-error" role="alert">{error}</div>}

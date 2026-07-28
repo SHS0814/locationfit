@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
+from backend.app.financial_catalog.loader import load_curated_catalog
 from backend.app.schemas.finance import (
     ConfirmedLeaseCandidate,
     FinancePlanRequest,
     FounderEligibility,
-    LeaseCandidateExtraction,
-    LeaseCandidateExtractRequest,
     StartupAdditionalCosts,
 )
 from backend.app.services.finance_service import FinancePlanService, calculate_funding
-from backend.app.services.listing_service import LeaseCandidateService, _validate_public_url
-from backend.app.financial_catalog.loader import load_curated_catalog
 
 
 CATALOG_ROOT = Path(__file__).resolve().parents[2] / "config/financial_catalog"
@@ -62,8 +58,14 @@ def test_policy_matching_is_deterministic_and_does_not_promise_approval() -> Non
     )
     candidates = result["policy_candidates"]
     assert len(candidates) == 33
-    general = next(item for item in candidates if item["program_id"] == "semas-2026-general-management-stability")
-    biz_card = next(item for item in candidates if item["program_id"] == "koreg-2026-biz-plus-card")
+    general = next(
+        item for item in candidates
+        if item["program_id"] == "semas-2026-general-management-stability"
+    )
+    biz_card = next(
+        item for item in candidates
+        if item["program_id"] == "koreg-2026-biz-plus-card"
+    )
     assert general["status"] == "basic_fit"
     assert biz_card["status"] == "needs_review"
     assert biz_card["benefits"][0]["amount_max_krw"] == 10_000_000
@@ -97,40 +99,3 @@ def test_policy_excluded_industry_only_rejects_policy_funds() -> None:
     assert policy_funds
     assert all(item["status"] == "not_eligible" for item in policy_funds)
     assert bank_loan["status"] == "basic_fit"
-
-
-class FakeRunner:
-    def __init__(self) -> None:
-        self.source = ""
-
-    async def run(self, source: str) -> LeaseCandidateExtraction:
-        self.source = source
-        return LeaseCandidateExtraction(
-            address="서울시 중구 테스트로 1",
-            deposit_krw=50_000_000,
-            monthly_rent_krw=2_000_000,
-            missing_fields=["management_fee_krw", "key_money_krw", "rentable_area_sqm", "floor"],
-        )
-
-
-def test_pasted_listing_is_extracted_without_fetching_url() -> None:
-    runner = FakeRunner()
-    service = LeaseCandidateService(runner, timeout_seconds=1)
-    result = asyncio.run(service.extract(LeaseCandidateExtractRequest(
-        source_url="https://example.com/listing/1",
-        source_text="보증금 5천만원, 월세 200만원",
-        selected_area_name="명동",
-    )))
-    assert result["source_kind"] == "url_and_text"
-    assert result["requires_confirmation"] is True
-    assert "명동" in runner.source
-
-
-def test_private_and_loopback_listing_urls_are_rejected() -> None:
-    for url in ("http://127.0.0.1/listing", "http://localhost/listing"):
-        try:
-            asyncio.run(_validate_public_url(url))
-        except ValueError as exc:
-            assert "공개 인터넷 주소" in str(exc)
-        else:
-            raise AssertionError("private listing URL must be rejected")

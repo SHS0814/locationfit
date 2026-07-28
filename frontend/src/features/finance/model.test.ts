@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { LeaseCandidateExtractResponse } from '../../types/api'
 import {
-  buildFinancePlanRequest, candidateMissingCosts, draftFromExtraction, emptyFinanceState,
-  emptyLeaseDraft, firstYearLeaseCash, formatKrw, hasDuplicateSourceUrl, manwonToKrw,
+  buildFinancePlanRequest, candidateFromDraft, candidateMissingCosts, emptyFinanceState,
+  emptyLeaseDraft, firstYearLeaseCash, formatKrw, manwonToKrw,
   validateLeaseDraft, type LeaseCandidateRecord,
 } from './model'
 
@@ -23,21 +22,6 @@ describe('finance model', () => {
     expect(manwonToKrw('invalid')).toBe(0)
   })
 
-  it('keeps missing management fee distinct from zero', () => {
-    const response: LeaseCandidateExtractResponse = {
-      request_id: 'r1', source_url: null, source_kind: 'text', requires_confirmation: true, warnings: [],
-      extracted: {
-        listing_title: '테스트 매물', address: '서울시 중구', deposit_krw: 50_000_000,
-        monthly_rent_krw: 2_000_000, management_fee_krw: null, key_money_krw: 0,
-        rentable_area_sqm: 33.1, floor: '1층', notes: null, missing_fields: ['management_fee_krw'],
-      },
-    }
-    const draft = draftFromExtraction(response, emptyLeaseDraft())
-    expect(draft.money.deposit).toBe('5000')
-    expect(draft.money.managementFee).toBe('')
-    expect(draft.money.keyMoney).toBe('0')
-  })
-
   it('does not calculate or finance a candidate with unknown costs', () => {
     const incomplete = candidate({ managementFeeKrw: null })
     expect(candidateMissingCosts(incomplete)).toEqual(['관리비'])
@@ -56,12 +40,17 @@ describe('finance model', () => {
     expect(formatKrw(150_000_000)).toBe('1.5억원')
   })
 
-  it('validates source URLs and detects duplicates only inside the same area', () => {
+  it('creates manual candidates and preserves legacy source metadata when edited', () => {
     const draft = emptyLeaseDraft()
-    draft.sourceUrl = 'javascript:alert(1)'
-    expect(validateLeaseDraft(draft)).toContain('http 또는 https')
-    const existing = candidate({ sourceUrl: 'https://example.com/listing/1/' })
-    expect(hasDuplicateSourceUrl([existing], candidate({ id: 'listing-2', sourceUrl: 'https://example.com/listing/1#detail' }))).toBe(true)
-    expect(hasDuplicateSourceUrl([existing], candidate({ id: 'listing-2', areaCode: 'A2', sourceUrl: 'https://example.com/listing/1' }))).toBe(false)
+    draft.address = '서울시 중구'
+    draft.money.deposit = '5000'
+    draft.money.monthlyRent = '200'
+    const area = {
+      area_code: 'A1', area_name: '테스트상권', industry_code: 'CS100001', industry_name: '한식',
+    } as Parameters<typeof candidateFromDraft>[1]
+    expect(candidateFromDraft(draft, area).sourceKind).toBe('manual')
+    const existing = candidate({ sourceUrl: 'https://example.com/listing/1', sourceKind: 'url' })
+    expect(candidateFromDraft(draft, area, existing).sourceUrl).toBe(existing.sourceUrl)
+    expect(candidateFromDraft(draft, area, existing).sourceKind).toBe('url')
   })
 })

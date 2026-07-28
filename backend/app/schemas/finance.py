@@ -8,45 +8,6 @@ from pydantic import BaseModel, Field, HttpUrl, model_validator
 Money = int
 
 
-class LeaseCandidateExtraction(BaseModel):
-    listing_title: str | None = Field(default=None, max_length=200)
-    address: str | None = Field(default=None, max_length=300)
-    deposit_krw: Money | None = Field(default=None, ge=0)
-    monthly_rent_krw: Money | None = Field(default=None, ge=0)
-    management_fee_krw: Money | None = Field(default=None, ge=0)
-    key_money_krw: Money | None = Field(default=None, ge=0)
-    rentable_area_sqm: float | None = Field(default=None, gt=0, le=100_000)
-    floor: str | None = Field(default=None, max_length=80)
-    notes: str | None = Field(default=None, max_length=1_000)
-    missing_fields: list[
-        Literal[
-            "address", "deposit_krw", "monthly_rent_krw", "management_fee_krw",
-            "key_money_krw", "rentable_area_sqm", "floor",
-        ]
-    ] = Field(default_factory=list)
-
-
-class LeaseCandidateExtractRequest(BaseModel):
-    source_url: HttpUrl | None = None
-    source_text: str | None = Field(default=None, max_length=8_000)
-    selected_area_name: str | None = Field(default=None, max_length=120)
-
-    @model_validator(mode="after")
-    def require_source(self) -> "LeaseCandidateExtractRequest":
-        if self.source_url is None and not (self.source_text or "").strip():
-            raise ValueError("매물 URL 또는 매물 설명을 입력해주세요.")
-        return self
-
-
-class LeaseCandidateExtractResponse(BaseModel):
-    request_id: str
-    source_url: str | None
-    source_kind: Literal["url", "text", "url_and_text"]
-    extracted: LeaseCandidateExtraction
-    warnings: list[str]
-    requires_confirmation: bool = True
-
-
 class ConfirmedLeaseCandidate(BaseModel):
     source_url: HttpUrl | None = None
     listing_title: str | None = Field(default=None, max_length=200)

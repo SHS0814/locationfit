@@ -124,7 +124,7 @@ export function LeaseCandidateWorkspace({
         <button type="button" className="candidate-add-button" onClick={onAdd}>+ 임대매물 추가</button>
       </header>
 
-      {candidates.length === 0 ? <div className="candidate-empty"><h3>추가한 임대매물이 없습니다</h3><p>외부에서 찾은 매물을 직접 입력하거나 AI로 불러오세요.</p><button type="button" onClick={onAdd}>첫 임대매물 추가</button></div> : <div className="candidate-grid">{candidates.map((candidate) => {
+      {candidates.length === 0 ? <div className="candidate-empty"><h3>추가한 임대매물이 없습니다</h3><p>직접 확인한 임대매물 정보를 입력해 비교하세요.</p><button type="button" onClick={onAdd}>첫 임대매물 추가</button></div> : <div className="candidate-grid">{candidates.map((candidate) => {
         const total = firstYearLeaseCash(candidate)
         const missing = candidateMissingCosts(candidate)
         return <article key={candidate.id} className={selectedId === candidate.id ? 'selected' : ''}>

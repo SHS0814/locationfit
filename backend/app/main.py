@@ -38,7 +38,6 @@ from backend.app.services.store_service import (
 )
 from backend.app.services.web_research_service import OpenAIWebResearchRunner, WebResearchService
 from backend.app.services.finance_service import FinancePlanService
-from backend.app.services.listing_service import LeaseCandidateService, OpenAIListingExtractionRunner
 from backend.app.services.workspace_agent_service import OpenAIWorkspaceAgentRunner, WorkspaceAgentService
 
 
@@ -80,10 +79,6 @@ async def lifespan(app: FastAPI):
             OpenAIWebResearchRunner(model=settings.openai_model),
             timeout_seconds=settings.web_research_timeout_seconds,
         )
-        app.state.lease_candidate_service = LeaseCandidateService(
-            OpenAIListingExtractionRunner(model=settings.openai_model),
-            timeout_seconds=settings.listing_extraction_timeout_seconds,
-        )
         app.state.finance_plan_service = FinancePlanService()
         app.state.startup_error = None
     except Exception as exc:
@@ -93,7 +88,6 @@ async def lifespan(app: FastAPI):
         app.state.workspace_agent = None
         app.state.store_service = None
         app.state.web_research_service = None
-        app.state.lease_candidate_service = None
         app.state.finance_plan_service = None
         app.state.startup_error = str(exc)
     yield
