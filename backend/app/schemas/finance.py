@@ -37,6 +37,7 @@ class FounderEligibility(BaseModel):
         "low_credit", "basic_livelihood", "near_poverty", "earned_income_tax_credit",
         "none", "unknown",
     ] = "unknown"
+    has_miso_good_repayment_history: bool | None = None
     has_policy_excluded_industry: bool | None = None
 
     @model_validator(mode="after")

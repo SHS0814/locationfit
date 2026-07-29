@@ -38,7 +38,11 @@ from backend.app.services.store_service import (
 )
 from backend.app.services.web_research_service import OpenAIWebResearchRunner, WebResearchService
 from backend.app.services.finance_service import FinancePlanService
-from backend.app.services.workspace_agent_service import OpenAIWorkspaceAgentRunner, WorkspaceAgentService
+from backend.app.services.workspace_agent_service import (
+    DatabaseFinancialCatalogProvider,
+    OpenAIWorkspaceAgentRunner,
+    WorkspaceAgentService,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -69,10 +73,6 @@ async def lifespan(app: FastAPI):
             timeout_seconds=settings.agent_timeout_seconds,
             cost_provider=cost_provider,
         )
-        app.state.workspace_agent = WorkspaceAgentService(
-            OpenAIWorkspaceAgentRunner(model=settings.openai_model),
-            timeout_seconds=settings.agent_timeout_seconds,
-        )
         app.state.web_research_service = WebResearchService(
             app.state.recommender,
             app.state.store_service,
@@ -80,6 +80,14 @@ async def lifespan(app: FastAPI):
             timeout_seconds=settings.web_research_timeout_seconds,
         )
         app.state.finance_plan_service = FinancePlanService()
+        app.state.workspace_agent = WorkspaceAgentService(
+            OpenAIWorkspaceAgentRunner(model=settings.openai_model),
+            store_service=app.state.store_service,
+            web_research_service=app.state.web_research_service,
+            finance_service=app.state.finance_plan_service,
+            catalog_provider=DatabaseFinancialCatalogProvider(),
+            timeout_seconds=settings.workspace_agent_timeout_seconds,
+        )
         app.state.startup_error = None
     except Exception as exc:
         logger.exception("Failed to load recommendation artifacts")

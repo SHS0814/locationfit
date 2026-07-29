@@ -40,7 +40,7 @@ def test_finance_plan_api_contract() -> None:
             assert body["request_id"] == response.headers["x-request-id"]
             assert body["funding"]["total_first_year_cash_need_krw"] == 43_200_000
             assert body["funding"]["funding_gap_krw"] == 18_200_000
-            assert len(body["policy_candidates"]) == 33
+            assert len(body["policy_candidates"]) == 37
             kb = next(
                 item for item in body["policy_candidates"]
                 if item["program_id"] == "kb-owner-plus-credit-line"

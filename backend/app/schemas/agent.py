@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -12,6 +12,7 @@ from backend.app.schemas.recommendation import (
     RecommendationRequestSchema,
     RentalEstimateSchema,
 )
+from backend.app.schemas.finance import StartupAdditionalCosts
 from backend.app.services.cost_provider import FloorType
 
 
@@ -138,13 +139,112 @@ class AgentTurnRequest(BaseModel):
         return self
 
 
+class StoreWorkspaceState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["stores"] = "stores"
+    area_code: str = Field(min_length=1, max_length=40)
+    industry_code: str = Field(min_length=1, max_length=40)
+    selected_store_id: str | None = Field(default=None, max_length=200)
+    active_recommendation_request: RecommendationRequestSchema
+    founder_context: FounderContext = Field(default_factory=FounderContext)
+
+    @model_validator(mode="after")
+    def validate_recommendation_industry(self) -> "StoreWorkspaceState":
+        if self.active_recommendation_request.industry_code != self.industry_code:
+            raise ValueError("현재 추천 업종과 점포분석 업종이 일치하지 않습니다.")
+        return self
+
+
+class FinanceEligibilitySnapshot(BaseModel):
+    """Editable finance state; completeness is checked only when a tool calculates."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    own_capital_krw: int = Field(ge=0)
+    business_status: Literal["pre_startup", "operating"]
+    business_age_months: int | None = Field(default=None, ge=0, le=1_200)
+    is_small_business: bool | None = None
+    vulnerability: Literal[
+        "low_credit", "basic_livelihood", "near_poverty", "earned_income_tax_credit",
+        "none", "unknown",
+    ] = "unknown"
+    has_miso_good_repayment_history: bool | None = None
+    has_policy_excluded_industry: bool | None = None
+
+
+class FinanceWorkspaceCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=100)
+    area_code: str = Field(min_length=1, max_length=40)
+    source_url: str | None = Field(default=None, max_length=2_000)
+    listing_title: str | None = Field(default=None, max_length=200)
+    address: str | None = Field(default=None, max_length=300)
+    deposit_krw: int = Field(ge=0)
+    monthly_rent_krw: int = Field(ge=0)
+    management_fee_krw: int | None = Field(default=None, ge=0)
+    key_money_krw: int | None = Field(default=None, ge=0)
+    rentable_area_sqm: float | None = Field(default=None, gt=0, le=100_000)
+    floor: str | None = Field(default=None, max_length=80)
+    additional_costs: StartupAdditionalCosts = Field(default_factory=StartupAdditionalCosts)
+    eligibility: FinanceEligibilitySnapshot
+
+
+class FinanceWorkspaceState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["finance"] = "finance"
+    area_code: str = Field(min_length=1, max_length=40)
+    selected_candidate_id: str | None = Field(default=None, max_length=100)
+    candidates: list[FinanceWorkspaceCandidate] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def validate_candidate_ids(self) -> "FinanceWorkspaceState":
+        ids = [item.id for item in self.candidates]
+        if len(ids) != len(set(ids)):
+            raise ValueError("자금계획 후보 ID가 중복되었습니다.")
+        if self.selected_candidate_id is not None and self.selected_candidate_id not in ids:
+            raise ValueError("선택한 자금계획 후보가 현재 후보 목록에 없습니다.")
+        if any(item.area_code != self.area_code for item in self.candidates):
+            raise ValueError("현재 상권에 속하지 않는 자금계획 후보가 포함되었습니다.")
+        return self
+
+
+WorkspaceState = Annotated[
+    StoreWorkspaceState | FinanceWorkspaceState,
+    Field(discriminator="kind"),
+]
+
+
+class WorkspaceToolOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal[
+        "store_summary", "store_detail", "web_research",
+        "finance_scenario", "finance_comparison", "policy_detail",
+    ]
+    status: Literal["succeeded", "failed"]
+    title: str = Field(min_length=1, max_length=200)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    as_of: str | None = None
+    assumptions: list[str] = Field(default_factory=list, max_length=30)
+    warnings: list[str] = Field(default_factory=list, max_length=30)
+
+
 class WorkspaceAgentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     workspace: Literal["stores", "finance"]
     message: str = Field(min_length=1, max_length=2_000)
     history: list[AgentMessage] = Field(default_factory=list, max_length=20)
-    context: dict[str, object] = Field(default_factory=dict)
+    state: WorkspaceState
+
+    @model_validator(mode="after")
+    def validate_workspace_state(self) -> "WorkspaceAgentRequest":
+        if self.workspace != self.state.kind:
+            raise ValueError("workspace와 state 종류가 일치하지 않습니다.")
+        return self
 
 
 class WorkspaceAgentResponse(BaseModel):
@@ -153,6 +253,7 @@ class WorkspaceAgentResponse(BaseModel):
     request_id: str
     workspace: Literal["stores", "finance"]
     assistant_message: str
+    tool_outputs: list[WorkspaceToolOutput] = Field(default_factory=list)
 
 
 class StrategyScenario(BaseModel):

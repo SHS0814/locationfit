@@ -32,6 +32,10 @@ organizations:
     name: 기업마당
     organization_type: aggregator
     homepage_url: https://www.bizinfo.go.kr/
+  - code: kinfa
+    name: 서민금융진흥원
+    organization_type: public_agency
+    homepage_url: https://www.kinfa.or.kr/
 data_sources:
   - key: kb-business-loans
     name: KB국민은행 개인사업자대출 공식 목록
@@ -63,3 +67,8 @@ data_sources:
     acquisition_mode: official_api
     organization_code: bizinfo
     base_url: https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do
+  - key: kinfa-microfinance-products
+    name: 서민금융진흥원 미소금융 창업·운영자금 공식 안내
+    acquisition_mode: curated_official_source
+    organization_code: kinfa
+    base_url: https://www.kinfa.or.kr/financialProduct/smileFinanceFunds.do

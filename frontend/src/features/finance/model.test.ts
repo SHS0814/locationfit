@@ -33,10 +33,12 @@ describe('finance model', () => {
     const complete = candidate()
     const state = emptyFinanceState()
     state.eligibility.own_capital_krw = 60_000_000
+    state.eligibility.has_miso_good_repayment_history = true
     expect(firstYearLeaseCash(complete)).toBe(87_600_000)
     const request = buildFinancePlanRequest(complete, state)
     expect(request.candidate.deposit_krw).toBe(50_000_000)
     expect(request.eligibility.own_capital_krw).toBe(60_000_000)
+    expect(request.eligibility.has_miso_good_repayment_history).toBe(true)
     expect(formatKrw(150_000_000)).toBe('1.5억원')
   })
 

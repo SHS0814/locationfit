@@ -16,7 +16,12 @@ CATALOG_ROOT = Path(__file__).resolve().parents[2] / "config/financial_catalog"
 CATALOG = load_curated_catalog(CATALOG_ROOT)
 
 
-def request_for(*, vulnerability: str = "unknown", months: int | None = None) -> FinancePlanRequest:
+def request_for(
+    *,
+    vulnerability: str = "unknown",
+    months: int | None = None,
+    miso_good_repayment: bool | None = None,
+) -> FinancePlanRequest:
     return FinancePlanRequest(
         candidate=ConfirmedLeaseCandidate(
             address="서울시 중구 테스트로 1",
@@ -37,6 +42,7 @@ def request_for(*, vulnerability: str = "unknown", months: int | None = None) ->
             business_age_months=months,
             is_small_business=True,
             vulnerability=vulnerability,
+            has_miso_good_repayment_history=miso_good_repayment,
             has_policy_excluded_industry=False,
         ),
     )
@@ -57,7 +63,7 @@ def test_policy_matching_is_deterministic_and_does_not_promise_approval() -> Non
         request_for(vulnerability="low_credit", months=6), CATALOG
     )
     candidates = result["policy_candidates"]
-    assert len(candidates) == 33
+    assert len(candidates) == 37
     general = next(
         item for item in candidates
         if item["program_id"] == "semas-2026-general-management-stability"
@@ -70,6 +76,66 @@ def test_policy_matching_is_deterministic_and_does_not_promise_approval() -> Non
     assert biz_card["status"] == "needs_review"
     assert biz_card["benefits"][0]["amount_max_krw"] == 10_000_000
     assert "심사" in result["disclosure"]
+
+
+def test_microfinance_startup_uses_financial_vulnerability() -> None:
+    eligible = FinancePlanService().create_plan(
+        request_for(vulnerability="near_poverty"), CATALOG
+    )
+    unknown = FinancePlanService().create_plan(request_for(), CATALOG)
+    ineligible = FinancePlanService().create_plan(
+        request_for(vulnerability="none"), CATALOG
+    )
+
+    def startup(result: dict[str, object]) -> dict[str, object]:
+        return next(
+            item for item in result["policy_candidates"]
+            if item["program_id"] == "kinfa-microfinance-startup"
+        )
+
+    assert startup(eligible)["status"] == "basic_fit"
+    assert startup(unknown)["status"] == "needs_review"
+    assert startup(ineligible)["status"] == "not_eligible"
+
+
+def test_microfinance_operating_and_facility_require_six_months() -> None:
+    early = FinancePlanService().create_plan(
+        request_for(vulnerability="low_credit", months=5), CATALOG
+    )
+    established = FinancePlanService().create_plan(
+        request_for(vulnerability="low_credit", months=6), CATALOG
+    )
+    slugs = {
+        "kinfa-microfinance-operating",
+        "kinfa-microfinance-facility-improvement",
+    }
+
+    early_items = {
+        item["program_id"]: item for item in early["policy_candidates"]
+        if item["program_id"] in slugs
+    }
+    established_items = {
+        item["program_id"]: item for item in established["policy_candidates"]
+        if item["program_id"] in slugs
+    }
+
+    assert all(item["status"] == "not_eligible" for item in early_items.values())
+    assert all(item["status"] == "basic_fit" for item in established_items.values())
+
+
+def test_microfinance_emergency_uses_good_repayment_history() -> None:
+    statuses: dict[bool | None, str] = {}
+    for history in (True, False, None):
+        result = FinancePlanService().create_plan(
+            request_for(miso_good_repayment=history), CATALOG
+        )
+        emergency = next(
+            item for item in result["policy_candidates"]
+            if item["program_id"] == "kinfa-microfinance-emergency-living"
+        )
+        statuses[history] = emergency["status"]
+
+    assert statuses == {True: "basic_fit", False: "not_eligible", None: "needs_review"}
 
 
 def test_operating_fund_requires_three_months() -> None:

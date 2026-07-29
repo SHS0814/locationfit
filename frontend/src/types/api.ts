@@ -272,6 +272,7 @@ export interface FinancePlanRequest {
     business_age_months: number | null
     is_small_business: boolean | null
     vulnerability: FinancialVulnerability
+    has_miso_good_repayment_history: boolean | null
     has_policy_excluded_industry: boolean | null
   }
 }
@@ -561,15 +562,60 @@ export interface AgentTurnResponse {
 
 export type WorkspaceAgentScope = 'stores' | 'finance'
 
+export interface StoreWorkspaceAgentState {
+  kind: 'stores'
+  area_code: string
+  industry_code: string
+  selected_store_id: string | null
+  active_recommendation_request: RecommendationRequest
+  founder_context: FounderContext
+}
+
+export interface FinanceWorkspaceCandidateState {
+  id: string
+  area_code: string
+  source_url: string | null
+  listing_title: string | null
+  address: string | null
+  deposit_krw: number
+  monthly_rent_krw: number
+  management_fee_krw: number | null
+  key_money_krw: number | null
+  rentable_area_sqm: number | null
+  floor: string | null
+  additional_costs: FinancePlanRequest['additional_costs']
+  eligibility: FinancePlanRequest['eligibility']
+}
+
+export interface FinanceWorkspaceAgentState {
+  kind: 'finance'
+  area_code: string
+  selected_candidate_id: string | null
+  candidates: FinanceWorkspaceCandidateState[]
+}
+
+export type WorkspaceAgentState = StoreWorkspaceAgentState | FinanceWorkspaceAgentState
+
+export interface WorkspaceToolOutput {
+  kind: 'store_summary' | 'store_detail' | 'web_research' | 'finance_scenario' | 'finance_comparison' | 'policy_detail'
+  status: 'succeeded' | 'failed'
+  title: string
+  payload: Record<string, unknown>
+  as_of: string | null
+  assumptions: string[]
+  warnings: string[]
+}
+
 export interface WorkspaceAgentTurnRequest {
   workspace: WorkspaceAgentScope
   message: string
   history: AgentMessage[]
-  context: Record<string, unknown>
+  state: WorkspaceAgentState
 }
 
 export interface WorkspaceAgentTurnResponse {
   request_id: string
   workspace: WorkspaceAgentScope
   assistant_message: string
+  tool_outputs: WorkspaceToolOutput[]
 }

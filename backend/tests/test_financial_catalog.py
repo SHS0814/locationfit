@@ -14,20 +14,21 @@ from backend.app.financial_catalog.validation import validate_catalog
 
 
 CATALOG_ROOT = Path(__file__).resolve().parents[2] / "config/financial_catalog"
-CHECKED_AT = datetime(2026, 7, 24, tzinfo=UTC)
+CHECKED_AT = datetime(2026, 7, 29, tzinfo=UTC)
 
 
 def test_curated_catalog_has_expected_initial_scope() -> None:
     bundle = load_curated_catalog(CATALOG_ROOT)
     report = validate_catalog(bundle, now=CHECKED_AT)
 
-    assert len(bundle.organizations) == 8
-    assert len(bundle.data_sources) == 6
-    assert len(bundle.products) == 33
+    assert len(bundle.organizations) == 9
+    assert len(bundle.data_sources) == 7
+    assert len(bundle.products) == 37
     assert sum(item.slug.startswith("kb-") for item in bundle.products) == 5
     assert sum(item.slug.startswith("semas-") for item in bundle.products) == 11
     assert sum(item.slug.startswith("seoul-") for item in bundle.products) == 16
     assert sum(item.slug.startswith("koreg-") for item in bundle.products) == 1
+    assert sum(item.slug.startswith("kinfa-microfinance-") for item in bundle.products) == 4
     assert report.error_count == 0
     assert report.warning_count == 0
 
@@ -40,6 +41,33 @@ def test_unknown_financial_values_stay_null() -> None:
     assert benefit.amount_max_krw is None
     assert benefit.interest_rate_min_pct is None
     assert benefit.original_text is not None
+
+
+def test_microfinance_products_keep_official_structured_terms() -> None:
+    bundle = load_curated_catalog(CATALOG_ROOT)
+    products = {
+        item.slug: item for item in bundle.products
+        if item.slug.startswith("kinfa-microfinance-")
+    }
+
+    assert set(products) == {
+        "kinfa-microfinance-startup",
+        "kinfa-microfinance-operating",
+        "kinfa-microfinance-facility-improvement",
+        "kinfa-microfinance-emergency-living",
+    }
+    startup = products["kinfa-microfinance-startup"].benefits[0]
+    emergency = products["kinfa-microfinance-emergency-living"].benefits[0]
+    assert startup.amount_max_krw == 70_000_000
+    assert startup.interest_rate_max_pct == 4.5
+    assert startup.term_max_months == 60
+    assert emergency.amount_max_krw == 10_000_000
+    assert emergency.term_max_months == 48
+    assert all(
+        source.data_source_key == "kinfa-microfinance-products"
+        for product in products.values()
+        for source in product.sources
+    )
 
 
 def test_bizinfo_filters_to_seoul_small_business_and_keeps_unparsed_terms() -> None:
@@ -66,7 +94,7 @@ def test_bizinfo_filters_to_seoul_small_business_and_keeps_unparsed_terms() -> N
     merged = merge_bizinfo_items(bundle, items, checked_at=CHECKED_AT)
     added = next(item for item in merged.products if item.slug == "bizinfo-pbln-test-1")
 
-    assert len(merged.products) == 34
+    assert len(merged.products) == 38
     assert added.status == ProductStatus.ACTIVE
     assert added.application_end_date.isoformat() == "2026-12-31"
     assert added.benefits == []
@@ -90,7 +118,7 @@ def test_bizinfo_alias_attaches_one_announcement_to_all_semas_products() -> None
     merged = merge_bizinfo_items(bundle, [item], checked_at=CHECKED_AT)
     semas = [product for product in merged.products if product.slug.startswith("semas-")]
 
-    assert len(merged.products) == 33
+    assert len(merged.products) == 37
     assert len(semas) == 11
     assert all(any(
         source.data_source_key == "bizinfo-api"

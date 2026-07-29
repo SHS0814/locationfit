@@ -54,7 +54,8 @@ export const emptyFinanceState = (): LeaseCandidateFinanceState => ({
   },
   eligibility: {
     own_capital_krw: 0, business_status: 'pre_startup', business_age_months: null,
-    is_small_business: null, vulnerability: 'unknown', has_policy_excluded_industry: null,
+    is_small_business: null, vulnerability: 'unknown', has_miso_good_repayment_history: null,
+    has_policy_excluded_industry: null,
   },
   plan: null,
 })

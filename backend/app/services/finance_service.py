@@ -69,6 +69,10 @@ def _applicant_context(payload: FinancePlanRequest) -> dict[str, Any]:
             else 0
         ),
         "is_small_business": eligibility.is_small_business,
+        "vulnerability_category": (
+            None if eligibility.vulnerability == "unknown" else eligibility.vulnerability
+        ),
+        "has_miso_good_repayment_history": eligibility.has_miso_good_repayment_history,
     }
 
 

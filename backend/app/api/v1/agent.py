@@ -47,9 +47,10 @@ async def workspace_agent_turn(
     request: Request,
     service: WorkspaceAgentService = Depends(get_workspace_agent),
 ) -> WorkspaceAgentResponse:
-    assistant_message = await service.turn(payload)
+    result = await service.turn(payload)
     return WorkspaceAgentResponse(
         request_id=request.state.request_id,
         workspace=payload.workspace,
-        assistant_message=assistant_message,
+        assistant_message=result.assistant_message,
+        tool_outputs=result.tool_outputs,
     )

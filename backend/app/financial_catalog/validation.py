@@ -23,6 +23,7 @@ KNOWN_RULE_FIELDS = {
     "credit_score_nice",
     "credit_score_kcb",
     "vulnerability_category",
+    "has_miso_good_repayment_history",
     "online_seller",
 }
 ALLOWED_EXTRA_KEYS = {

@@ -32,6 +32,9 @@ class Settings:
     agent_rate_limit_per_minute: int = int(os.getenv("AGENT_RATE_LIMIT_PER_MINUTE", "10"))
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
     agent_timeout_seconds: float = float(os.getenv("AGENT_TIMEOUT_SECONDS", "30"))
+    workspace_agent_timeout_seconds: float = float(
+        os.getenv("WORKSPACE_AGENT_TIMEOUT_SECONDS", "60")
+    )
     web_research_timeout_seconds: float = float(os.getenv("WEB_RESEARCH_TIMEOUT_SECONDS", "45"))
     agent_max_turns: int = int(os.getenv("AGENT_MAX_TURNS", "4"))
     max_request_bytes: int = int(os.getenv("MAX_REQUEST_BYTES", str(32 * 1024)))

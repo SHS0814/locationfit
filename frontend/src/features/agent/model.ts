@@ -83,8 +83,8 @@ export type WorkspaceChats = Record<WorkspaceAgentScope, AgentMessage[]>
 
 export function createInitialWorkspaceChats(): WorkspaceChats {
   return {
-    stores: [{ role: 'assistant', content: '이 대화에서는 선택한 상권 내부의 경쟁점·보완업종·주변시설과 선택 업소만 분석합니다.' }],
-    finance: [{ role: 'assistant', content: '이 대화에서는 현재 임대매물 후보의 비용과 자금계획·정책지원 1차 후보만 설명합니다.' }],
+    stores: [{ role: 'assistant', content: '선택한 상권의 점포 도구를 직접 조회합니다. 최신 외부 정보는 요청할 때만 검색합니다.' }],
+    finance: [{ role: 'assistant', content: '현재 임대 후보를 직접 계산·비교하고, 저장값을 바꾸지 않는 가정 시나리오도 만들 수 있습니다.' }],
   }
 }
 
@@ -276,6 +276,7 @@ export function createDemoLeaseFinanceState(): LeaseCandidateFinanceState {
       business_age_months: null,
       is_small_business: true,
       vulnerability: 'unknown',
+      has_miso_good_repayment_history: false,
       has_policy_excluded_industry: false,
     },
     plan: null,
@@ -393,6 +394,13 @@ function restoreLeaseFinanceStates(value: unknown): Record<string, LeaseCandidat
   if (!value || typeof value !== 'object') return {}
   return Object.fromEntries(Object.entries(value).map(([key, rawState]) => {
     const state = rawState as LeaseCandidateFinanceState
+    const normalizedState = {
+      ...state,
+      eligibility: {
+        ...state.eligibility,
+        has_miso_good_repayment_history: state.eligibility?.has_miso_good_repayment_history ?? null,
+      },
+    }
     const candidates = state.plan?.policy_candidates
     const compatiblePlan = state.plan == null || (
       Array.isArray(candidates)
@@ -402,7 +410,7 @@ function restoreLeaseFinanceStates(value: unknown): Record<string, LeaseCandidat
         && Array.isArray(candidate.benefits)
       ))
     )
-    return [key, compatiblePlan ? state : { ...state, plan: null }]
+    return [key, compatiblePlan ? normalizedState : { ...normalizedState, plan: null }]
   }))
 }
 

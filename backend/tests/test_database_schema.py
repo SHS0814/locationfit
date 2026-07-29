@@ -246,8 +246,8 @@ def test_catalog_preview_apply_is_atomic_and_stale_safe(tmp_path: Path) -> None:
             session.flush()
             stored = bundle_from_database(session)
 
-            assert result == {"added": 33, "updated": 0, "closed": 0}
-            assert len(stored.products) == 33
+            assert result == {"added": 37, "updated": 0, "closed": 0}
+            assert len(stored.products) == 37
             assert sum(item.slug.startswith("semas-") for item in stored.products) == 11
             assert sum(
                 source.external_id == "mss-2026-448"
@@ -267,8 +267,8 @@ def test_catalog_preview_apply_is_atomic_and_stale_safe(tmp_path: Path) -> None:
             second_result = apply_preview(session, second_run_dir)
             session.flush()
 
-            assert second_result == {"added": 0, "updated": 33, "closed": 0}
-            assert len(bundle_from_database(session).products) == 33
+            assert second_result == {"added": 0, "updated": 37, "closed": 0}
+            assert len(bundle_from_database(session).products) == 37
 
             api_item = {
                 "pblancId": "PBLN_INTEGRATION_ACTIVE",
@@ -288,7 +288,7 @@ def test_catalog_preview_apply_is_atomic_and_stale_safe(tmp_path: Path) -> None:
                 now=datetime(2026, 7, 24, 0, 0, 2, tzinfo=UTC),
             )
             api_result = apply_preview(session, api_run_dir)
-            assert api_result == {"added": 1, "updated": 33, "closed": 0}
+            assert api_result == {"added": 1, "updated": 37, "closed": 0}
 
             removal_run_dir = preview_catalog(
                 session,
@@ -311,9 +311,9 @@ def test_catalog_preview_apply_is_atomic_and_stale_safe(tmp_path: Path) -> None:
             assert removal_diff["close_candidates"] == [
                 "bizinfo-pbln-integration-active"
             ]
-            assert removal_result == {"added": 0, "updated": 33, "closed": 1}
+            assert removal_result == {"added": 0, "updated": 37, "closed": 1}
             assert removed_product.status == ProductStatus.CLOSED
-            assert len(stored_after_removal.products) == 34
+            assert len(stored_after_removal.products) == 38
             session.rollback()
     finally:
         engine.dispose()

@@ -6,7 +6,7 @@ products:
     status: active
     summary: 개인사업자 소상공인의 단기 운영자금 이용을 지원하는 보증 연계 카드 사업입니다.
     application_url: https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000119801
-    last_checked_at: 2026-07-24T00:00:00+09:00
+    last_checked_at: 2026-07-29T00:00:00+09:00
     extra_data:
       funding_purposes: [working_capital]
       repayment_methods: [credit_card]
@@ -59,4 +59,4 @@ products:
         title: 2026년 소상공인(개인사업자) 비즈플러스카드 지원사업 시행 공고
         official_url: https://www.bizinfo.go.kr/sii/siia/selectSIIA200Detail.do?pblancId=PBLN_000000000119801
         published_at: 2026-03-23T00:00:00+09:00
-        checked_at: 2026-07-24T00:00:00+09:00
+        checked_at: 2026-07-29T00:00:00+09:00

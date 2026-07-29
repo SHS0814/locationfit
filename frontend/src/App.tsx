@@ -39,7 +39,7 @@ import { AreaStoreExplorer } from './features/stores/AreaStoreExplorer'
 import { LeaseCandidateEditor } from './features/finance/LeaseCandidateEditor'
 import { LeaseCandidateWorkspace } from './features/finance/LeaseCandidateWorkspace'
 import { emptyFinanceState, type LeaseCandidateFinanceState, type LeaseCandidateRecord } from './features/finance/model'
-import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption, StoreRelation, WorkspaceAgentScope } from './types/api'
+import type { AgentAssumption, AgentTurnRequest, MetadataResponse, RecommendationDraft, RecommendationItem, RelaxationOption, StoreRelation, WorkspaceAgentScope, WorkspaceAgentState, WorkspaceToolOutput } from './types/api'
 
 type RecommendationPage = 'analysis' | WorkspaceAgentScope
 
@@ -48,12 +48,6 @@ const recommendationPageLabels: Record<RecommendationPage, string> = {
   analysis: '상권분석',
   stores: '상권내 점포분석',
   finance: '자금계획',
-}
-
-function compactRecommendation(item: RecommendationItem): Record<string, unknown> {
-  const compact = { ...item } as Record<string, unknown>
-  delete compact.boundary
-  return compact
 }
 
 export default function App() {
@@ -94,6 +88,7 @@ export default function App() {
   const [editingLeaseCandidateId, setEditingLeaseCandidateId] = useState<string | null>(null)
   const [workspaceLoading, setWorkspaceLoading] = useState<WorkspaceAgentScope | null>(null)
   const [workspaceError, setWorkspaceError] = useState<Record<WorkspaceAgentScope, string | null>>({ stores: null, finance: null })
+  const [workspaceToolOutputs, setWorkspaceToolOutputs] = useState<Record<string, WorkspaceToolOutput[]>>({})
   const demoStarted = useRef(false)
   const recommendationItemsReady = session.items.length > 0 && session.items.every(hasAreaBoundary)
 
@@ -629,6 +624,9 @@ export default function App() {
         },
       }
     })
+    setWorkspaceToolOutputs((current) => Object.fromEntries(
+      Object.entries(current).filter(([key]) => !key.startsWith(`finance:${candidate.areaCode}:`)),
+    ))
     return null
   }
 
@@ -644,6 +642,9 @@ export default function App() {
         selectedLeaseCandidateId: current.selectedLeaseCandidateId === candidateId ? null : current.selectedLeaseCandidateId,
       }
     })
+    setWorkspaceToolOutputs((current) => Object.fromEntries(
+      Object.entries(current).filter(([key]) => !(key.startsWith('finance:') && key.endsWith(`:${candidateId}`))),
+    ))
   }
 
   const updateLeaseFinance = (candidateId: string, finance: LeaseCandidateFinanceState) => {
@@ -651,38 +652,66 @@ export default function App() {
       ...current,
       leaseFinanceById: { ...current.leaseFinanceById, [candidateId]: finance },
     }))
+    setWorkspaceToolOutputs((current) => Object.fromEntries(
+      Object.entries(current).filter(([key]) => !(key.startsWith('finance:') && key.endsWith(`:${candidateId}`))),
+    ))
   }
 
-  const workspaceContext = (workspace: WorkspaceAgentScope): Record<string, unknown> => {
+  const workspaceEvidenceKey = (workspace: WorkspaceAgentScope) => (
+    workspace === 'stores'
+      ? `stores:${session.storeAreaCode || 'none'}:${activeStoreArea?.industry_code || 'none'}:${session.selectedStoreId || 'none'}`
+      : `finance:${session.financeAreaCode || 'none'}:${session.selectedLeaseCandidateId || 'none'}`
+  )
+
+  const workspaceState = (workspace: WorkspaceAgentScope): WorkspaceAgentState | null => {
     if (workspace === 'stores') {
-      const selectedStore = session.storeAnalysis?.stores.find((item) => item.store_id === session.selectedStoreId) || null
+      if (!activeStoreArea || !session.activeRequest) return null
       return {
-        area: activeStoreArea ? compactRecommendation(activeStoreArea) : null,
-        reference_month: session.storeAnalysis?.reference_month || null,
-        summary: session.storeAnalysis?.summary || null,
-        selected_store: selectedStore,
-        active_relations: session.storeRelations,
-        search: session.storeSearch,
-        disclosure: session.storeAnalysis?.disclosure || null,
-        warnings: session.storeAnalysis?.warnings || [],
+        kind: 'stores',
+        area_code: activeStoreArea.area_code,
+        industry_code: activeStoreArea.industry_code,
+        selected_store_id: session.selectedStoreId,
+        active_recommendation_request: session.activeRequest,
+        founder_context: session.context,
       }
     }
+    if (!activeFinanceArea) return null
     const areaCandidates = activeFinanceArea
       ? session.leaseCandidates.filter((item) => item.areaCode === activeFinanceArea.area_code).slice(0, 10)
       : []
     return {
-      area: activeFinanceArea ? compactRecommendation(activeFinanceArea) : null,
-      candidates: areaCandidates,
+      kind: 'finance',
+      area_code: activeFinanceArea.area_code,
       selected_candidate_id: session.selectedLeaseCandidateId,
-      finance_by_candidate: Object.fromEntries(areaCandidates.map((candidate) => [
-        candidate.id,
-        session.leaseFinanceById[candidate.id] || null,
-      ])),
+      candidates: areaCandidates.map((candidate) => {
+        const finance = session.leaseFinanceById[candidate.id] || emptyFinanceState()
+        return {
+          id: candidate.id,
+          area_code: candidate.areaCode,
+          source_url: candidate.sourceUrl,
+          listing_title: candidate.title || null,
+          address: candidate.address || null,
+          deposit_krw: candidate.depositKrw,
+          monthly_rent_krw: candidate.monthlyRentKrw,
+          management_fee_krw: candidate.managementFeeKrw,
+          key_money_krw: candidate.keyMoneyKrw,
+          rentable_area_sqm: candidate.rentableAreaSqm,
+          floor: candidate.floor,
+          additional_costs: finance.additionalCosts,
+          eligibility: finance.eligibility,
+        }
+      }),
     }
   }
 
   const sendWorkspaceMessage = async (workspace: WorkspaceAgentScope, message: string) => {
     const history = session.workspaceChats[workspace]
+    const state = workspaceState(workspace)
+    if (!state) {
+      setWorkspaceError((current) => ({ ...current, [workspace]: '먼저 분석할 상권을 선택해주세요.' }))
+      return
+    }
+    const evidenceKey = workspaceEvidenceKey(workspace)
     setWorkspaceLoading(workspace)
     setWorkspaceError((current) => ({ ...current, [workspace]: null }))
     setSession((current) => ({
@@ -697,8 +726,9 @@ export default function App() {
         workspace,
         message,
         history: history.slice(-20),
-        context: workspaceContext(workspace),
+        state,
       })
+      setWorkspaceToolOutputs((current) => ({ ...current, [evidenceKey]: response.tool_outputs }))
       setSession((current) => ({
         ...current,
         workspaceChats: {
@@ -718,6 +748,8 @@ export default function App() {
 
   const clearWorkspaceChat = (workspace: WorkspaceAgentScope) => {
     setWorkspaceError((current) => ({ ...current, [workspace]: null }))
+    const evidenceKey = workspaceEvidenceKey(workspace)
+    setWorkspaceToolOutputs((current) => ({ ...current, [evidenceKey]: [] }))
     setSession((current) => ({
       ...current,
       workspaceChats: {
@@ -743,6 +775,7 @@ export default function App() {
               history={session.workspaceChats[recommendationPage]}
               loading={workspaceLoading === recommendationPage}
               error={workspaceError[recommendationPage]}
+              toolOutputs={workspaceToolOutputs[workspaceEvidenceKey(recommendationPage)] || []}
               onSend={(message) => sendWorkspaceMessage(recommendationPage, message)}
               onClear={() => clearWorkspaceChat(recommendationPage)}
             />

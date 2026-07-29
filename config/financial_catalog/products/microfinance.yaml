@@ -1,0 +1,151 @@
+catalog_version: 1
+products:
+  - slug: kinfa-microfinance-startup
+    name: 미소금융 창업자금
+    product_type: policy_fund
+    status: active
+    summary: 제도권 금융 이용이 어려운 금융취약 자영업자의 창업 초기 자금을 지원합니다.
+    application_url: &kinfa_url https://www.kinfa.or.kr/financialProduct/smileFinanceFunds.do
+    last_checked_at: &checked 2026-07-29T00:00:00+09:00
+    extra_data:
+      funding_purposes: [startup, working_capital, facilities]
+      rate_basis: fixed
+      application_channels: [전국 미소금융지점]
+      category: 미소금융 창업·운영자금
+      curation_level: official_overview
+      eligibility_notes: 자금용도별 세부 한도, 사업성, 상환능력과 지원제한 요건은 미소금융 기관의 심사에서 확인해야 합니다.
+    organization_roles: &kinfa_roles
+      - organization_code: kinfa
+        role: authority
+    benefits:
+      - benefit_type: loan
+        amount_max_krw: 70000000
+        interest_rate_max_pct: 4.5
+        term_max_months: 60
+        grace_period_months: 12
+        original_text: 창업자금은 최대 7천만원, 금리 연 4.5%, 대출기간 최대 5년(거치기간 최대 1년)입니다.
+    eligibility_groups:
+      - name: 금융취약 예비창업자
+        rules:
+          - field_key: business_status
+            operator: equals
+            value: pre_startup
+            description: 창업을 준비 중인 예비창업자여야 합니다.
+          - &vulnerability_rule
+            field_key: vulnerability_category
+            operator: in
+            value: [low_credit, basic_livelihood, near_poverty, earned_income_tax_credit]
+            description: 개인신용평점 하위 20%, 기초생활수급자·차상위계층 이하 또는 근로장려금 신청자격 요건 중 하나를 충족해야 합니다.
+      - name: 금융취약 초기 사업자
+        rules:
+          - field_key: business_status
+            operator: equals
+            value: operating
+            description: 현재 영업 중인 사업자여야 합니다.
+          - field_key: business_age_months
+            operator: less_than_or_equal
+            value: 6
+            unit: month
+            description: 사업자등록 후 6개월 이내의 초기 사업자여야 합니다.
+          - *vulnerability_rule
+    sources:
+      - &kinfa_source
+        data_source_key: kinfa-microfinance-products
+        external_id: KFA_PDT_04010000
+        title: 서민금융진흥원 미소금융 창업·운영자금 공식 안내
+        official_url: *kinfa_url
+        checked_at: *checked
+
+  - slug: kinfa-microfinance-operating
+    name: 미소금융 운영자금
+    product_type: policy_fund
+    status: active
+    summary: 금융취약 자영업자의 제품·반제품·원재료 구입 등 사업 운영자금을 지원합니다.
+    application_url: *kinfa_url
+    last_checked_at: *checked
+    extra_data:
+      funding_purposes: [working_capital]
+      rate_basis: fixed
+      application_channels: [전국 미소금융지점]
+      category: 미소금융 창업·운영자금
+      curation_level: official_overview
+      eligibility_notes: 무등록사업자·프리랜서·청년의 한도와 기간은 별도 기준이 적용될 수 있으며 최종 대출 여부는 기관 심사로 결정됩니다.
+    organization_roles: *kinfa_roles
+    benefits:
+      - benefit_type: loan
+        amount_max_krw: 20000000
+        interest_rate_max_pct: 4.5
+        term_max_months: 60
+        grace_period_months: 6
+        original_text: 운영자금은 최대 2천만원, 금리 연 4.5%, 대출기간 최대 5년(거치기간 최대 6개월)입니다.
+    eligibility_groups:
+      - &operating_group
+        name: 금융취약 운영 사업자
+        rules:
+          - field_key: business_status
+            operator: equals
+            value: operating
+            description: 현재 영업 중인 사업자여야 합니다.
+          - field_key: business_age_months
+            operator: greater_than_or_equal
+            value: 6
+            unit: month
+            description: 사업자등록 후 6개월 이상 운영 중이어야 합니다.
+          - *vulnerability_rule
+    sources: [*kinfa_source]
+
+  - slug: kinfa-microfinance-facility-improvement
+    name: 미소금융 시설개선자금
+    product_type: policy_fund
+    status: active
+    summary: 금융취약 자영업자의 사업장 시설 개선에 필요한 자금을 지원합니다.
+    application_url: *kinfa_url
+    last_checked_at: *checked
+    extra_data:
+      funding_purposes: [facilities]
+      rate_basis: fixed
+      application_channels: [전국 미소금융지점]
+      category: 미소금융 창업·운영자금
+      curation_level: official_overview
+      eligibility_notes: 시설개선 목적과 견적·증빙, 사업성 및 상환능력은 미소금융 기관의 심사에서 확인해야 합니다.
+    organization_roles: *kinfa_roles
+    benefits:
+      - benefit_type: loan
+        amount_max_krw: 20000000
+        interest_rate_max_pct: 4.5
+        term_max_months: 60
+        grace_period_months: 6
+        original_text: 시설개선자금은 최대 2천만원, 금리 연 4.5%, 대출기간 최대 5년(거치기간 최대 6개월)입니다.
+    eligibility_groups: [*operating_group]
+    sources: [*kinfa_source]
+
+  - slug: kinfa-microfinance-emergency-living
+    name: 미소금융 긴급생계자금
+    product_type: policy_fund
+    status: active
+    summary: 미소금융 창업·운영·시설개선자금을 성실하게 상환한 이용자의 긴급 생계자금을 지원합니다.
+    application_url: *kinfa_url
+    last_checked_at: *checked
+    extra_data:
+      funding_purposes: [emergency_living]
+      rate_basis: fixed
+      application_channels: [전국 미소금융지점]
+      category: 미소금융 창업·운영자금
+      curation_level: official_overview
+      eligibility_notes: 기존 미소금융 이용기간과 성실상환 인정 여부, 긴급자금 필요성은 미소금융 기관에서 확인해야 합니다.
+    organization_roles: *kinfa_roles
+    benefits:
+      - benefit_type: loan
+        amount_max_krw: 10000000
+        interest_rate_max_pct: 4.5
+        term_max_months: 48
+        grace_period_months: 12
+        original_text: 긴급생계자금은 최대 1천만원, 금리 연 4.5%, 대출기간 최대 4년(거치기간 최대 1년)입니다.
+    eligibility_groups:
+      - name: 기존 미소금융 성실상환자
+        rules:
+          - field_key: has_miso_good_repayment_history
+            operator: equals
+            value: true
+            description: 미소금융 창업·운영·시설개선자금의 성실상환 요건을 충족해야 합니다.
+    sources: [*kinfa_source]

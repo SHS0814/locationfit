@@ -84,6 +84,7 @@ describe('agent session model', () => {
     }))
     expect(restored.leaseCandidates).toHaveLength(1)
     expect(restored.leaseFinanceById['listing-1'].eligibility.own_capital_krw).toBe(10_000_000)
+    expect(restored.leaseFinanceById['listing-1'].eligibility.has_miso_good_repayment_history).toBeNull()
     expect(restored.selectedLeaseCandidateId).toBe('listing-1')
     expect(restored.workspaceChats.stores[0].content).toContain('선택한 상권')
   })
@@ -123,6 +124,7 @@ describe('agent session model', () => {
 
     expect(restored.leaseFinanceById['listing-1'].plan).toBeNull()
     expect(restored.leaseFinanceById['listing-1'].additionalCosts.interior_krw).toBe(5_000_000)
+    expect(restored.leaseFinanceById['listing-1'].eligibility.has_miso_good_repayment_history).toBeNull()
   })
 
   it('keeps an industry-only draft ready after strategy selection', () => {
