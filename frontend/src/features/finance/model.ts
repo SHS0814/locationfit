@@ -64,9 +64,23 @@ export function krwToManwon(value: number | null): string {
   return value == null ? '' : String(Math.round(value / 10_000))
 }
 
+const MANWON_FORMAT = /^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/
+
+export function isManwonInput(value: string): boolean {
+  return /^\d*(?:\.\d*)?$/.test(value)
+}
+
 export function manwonToKrw(value: string): number {
-  const parsed = Number(value.replaceAll(',', '').trim())
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 10_000) : 0
+  const normalized = value.trim()
+  if (!MANWON_FORMAT.test(normalized)) {
+    throw new Error('금액은 0 이상의 숫자로 입력해야 합니다.')
+  }
+  const parsed = Number(normalized.replaceAll(',', ''))
+  const krw = Math.round(parsed * 10_000)
+  if (!Number.isFinite(parsed) || parsed < 0 || !Number.isSafeInteger(krw)) {
+    throw new Error('금액은 처리 가능한 0 이상의 숫자로 입력해야 합니다.')
+  }
+  return krw
 }
 
 export function manwonToNullableKrw(value: string): number | null {
@@ -92,6 +106,18 @@ export function validateLeaseDraft(draft: LeaseCandidateDraft): string | null {
   if (!draft.address.trim()) return '매물 주소를 입력해주세요.'
   if (draft.money.deposit.trim() === '') return '보증금을 입력해주세요. 보증금이 없으면 0을 입력하세요.'
   if (draft.money.monthlyRent.trim() === '') return '월세를 입력해주세요. 월세가 없으면 0을 입력하세요.'
+  const labels: Record<LeaseMoneyField, string> = {
+    deposit: '보증금', monthlyRent: '월세', managementFee: '월 관리비', keyMoney: '권리금',
+  }
+  for (const field of Object.keys(labels) as LeaseMoneyField[]) {
+    const value = draft.money[field]
+    if (value.trim() === '') continue
+    try {
+      manwonToKrw(value)
+    } catch {
+      return `${labels[field]} 금액은 0 이상의 숫자로 입력해주세요.`
+    }
+  }
   return null
 }
 
@@ -100,6 +126,8 @@ export function candidateFromDraft(
   area: RecommendationItem,
   existing?: LeaseCandidateRecord | null,
 ): LeaseCandidateRecord {
+  const validationError = validateLeaseDraft(draft)
+  if (validationError) throw new Error(validationError)
   const now = new Date().toISOString()
   const areaSqm = Number(draft.areaSqm)
   return {
@@ -130,6 +158,17 @@ export function candidateMissingCosts(candidate: LeaseCandidateRecord): string[]
   return missing
 }
 
+export function leaseSelectionForArea(
+  candidates: Array<Pick<LeaseCandidateRecord, 'id' | 'areaCode'>>,
+  selectedId: string | null,
+  areaCode: string | null,
+): string | null {
+  if (!selectedId || !areaCode) return null
+  return candidates.some((candidate) => candidate.id === selectedId && candidate.areaCode === areaCode)
+    ? selectedId
+    : null
+}
+
 export function firstYearLeaseCash(candidate: LeaseCandidateRecord): number | null {
   if (candidate.managementFeeKrw == null || candidate.keyMoneyKrw == null) return null
   return candidate.depositKrw + candidate.keyMoneyKrw
@@ -155,9 +194,25 @@ export function buildFinancePlanRequest(
       rentable_area_sqm: candidate.rentableAreaSqm,
       floor: candidate.floor,
     },
-    additional_costs: state.additionalCosts,
-    eligibility: state.eligibility,
+    additional_costs: { ...state.additionalCosts },
+    eligibility: { ...state.eligibility },
   }
+}
+
+export function mergeFinancePlanIfCurrent(
+  requested: FinancePlanRequest,
+  currentCandidate: LeaseCandidateRecord,
+  currentState: LeaseCandidateFinanceState,
+  plan: FinancePlanResponse,
+): LeaseCandidateFinanceState | null {
+  let current: FinancePlanRequest
+  try {
+    current = buildFinancePlanRequest(currentCandidate, currentState)
+  } catch {
+    return null
+  }
+  if (JSON.stringify(current) !== JSON.stringify(requested)) return null
+  return { ...currentState, plan }
 }
 
 export function formatKrw(value: number): string {

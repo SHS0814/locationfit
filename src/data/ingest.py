@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,78 @@ def grain_keys(grain: str) -> list[str]:
         "quarter_area": ["quarter", "area_code"],
         "quarter_area_industry": ["quarter", "area_code", "industry_code"],
     }.get(grain, [])
+
+
+def stable_frame_digest(frame: pd.DataFrame, *, sort_by: list[str]) -> str:
+    """Return an order- and dtype-representation-independent content digest."""
+    columns = sorted(frame.columns)
+    canonical = frame.loc[:, columns].convert_dtypes()
+    ordering = sort_by or columns
+    canonical = canonical.sort_values(
+        ordering,
+        kind="mergesort",
+        na_position="first",
+    ).reset_index(drop=True)
+    row_hashes = pd.util.hash_pandas_object(canonical, index=False, categorize=True)
+    digest = hashlib.sha256()
+    digest.update(json.dumps(columns, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    digest.update(row_hashes.to_numpy(dtype="uint64").astype(">u8", copy=False).tobytes())
+    return digest.hexdigest()
+
+
+def validate_preserved_interim(
+    name: str,
+    existing: pd.DataFrame,
+    current: pd.DataFrame,
+    *,
+    keys: list[str],
+    start_quarter: str,
+    end_quarter: str,
+) -> dict[str, str]:
+    """Require a protected interim file to match the normalized raw result exactly."""
+    missing_existing_keys = [key for key in keys if key not in existing]
+    if missing_existing_keys:
+        raise ValueError(f"[{name}] 기존 interim 표준 키 누락: {missing_existing_keys}")
+
+    existing_columns = set(existing.columns)
+    current_columns = set(current.columns)
+    if existing_columns != current_columns:
+        missing = sorted(current_columns - existing_columns)
+        extra = sorted(existing_columns - current_columns)
+        raise ValueError(
+            f"[{name}] 기존 interim 컬럼이 현재 raw 적재 결과와 다릅니다: "
+            f"missing={missing}, extra={extra}"
+        )
+
+    if keys:
+        for label, candidate in (("기존 interim", existing), ("현재 raw 적재 결과", current)):
+            duplicate_rows = int(candidate.duplicated(keys, keep=False).sum())
+            if duplicate_rows:
+                raise ValueError(
+                    f"[{name}] {label}에 중복 표준 키가 있습니다: rows={duplicate_rows:,}"
+                )
+
+    if len(existing) != len(current):
+        raise ValueError(
+            f"[{name}] 기존 interim 행 수가 현재 raw 적재 결과와 다릅니다: "
+            f"existing={len(existing):,}, raw={len(current):,}"
+        )
+
+    if "quarter" in existing and not existing.empty:
+        existing_quarter = existing["quarter"].astype("string")
+        if not existing_quarter.between(start_quarter, end_quarter).all():
+            raise ValueError(f"[{name}] 기존 interim에 분석 기간 밖 분기가 있습니다.")
+
+    key_digest = stable_frame_digest(existing.loc[:, keys], sort_by=keys) if keys else ""
+    current_key_digest = stable_frame_digest(current.loc[:, keys], sort_by=keys) if keys else ""
+    if key_digest != current_key_digest:
+        raise ValueError(f"[{name}] 기존 interim 핵심 키 집합이 현재 raw 적재 결과와 다릅니다.")
+
+    content_digest = stable_frame_digest(existing, sort_by=keys)
+    current_content_digest = stable_frame_digest(current, sort_by=keys)
+    if content_digest != current_content_digest:
+        raise ValueError(f"[{name}] 기존 interim 값이 현재 raw 적재 결과와 다릅니다.")
+    return {"key_digest": key_digest, "content_digest": content_digest}
 
 
 def ingest_dataset(
@@ -114,19 +188,17 @@ def ingest_all(
         destination = output_dir / f"{name}.parquet"
         if name in preserve_existing and destination.exists():
             existing = pd.read_parquet(destination)
-            if len(existing) != len(frame):
-                raise ValueError(
-                    f"[{name}] 기존 interim 행 수가 현재 raw 적재 결과와 다릅니다: "
-                    f"existing={len(existing):,}, raw={len(frame):,}"
-                )
             keys = grain_keys(spec.get("grain", ""))
-            missing_existing_keys = [key for key in keys if key not in existing]
-            if missing_existing_keys:
-                raise ValueError(f"[{name}] 기존 interim 표준 키 누락: {missing_existing_keys}")
-            if "quarter" in existing and not existing.empty:
-                existing_quarter = existing["quarter"].astype("string")
-                if not existing_quarter.between(start, end).all():
-                    raise ValueError(f"[{name}] 기존 interim에 분석 기간 밖 분기가 있습니다.")
+            preserved = validate_preserved_interim(
+                name,
+                existing,
+                frame,
+                keys=keys,
+                start_quarter=start,
+                end_quarter=end,
+            )
+            report["preserved_key_digest"] = preserved["key_digest"]
+            report["preserved_content_digest"] = preserved["content_digest"]
             report["write_status"] = "preserved_existing"
         else:
             frame.to_parquet(destination, index=False)

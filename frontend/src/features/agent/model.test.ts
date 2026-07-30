@@ -89,6 +89,20 @@ describe('agent session model', () => {
     expect(restored.workspaceChats.stores[0].content).toContain('선택한 상권')
   })
 
+  it('clears a restored lease selection that belongs to another area', () => {
+    const restored = restoreSession(JSON.stringify({
+      schemaVersion: 9,
+      history: [{ role: 'user', content: '다른 상권으로 이동' }],
+      draft: { ...emptyDraft, industry_code: 'CS100001' },
+      phase: 'results',
+      leaseCandidates: [{ id: 'listing-a', areaCode: 'A1', title: '이전 상권 매물' }],
+      selectedLeaseCandidateId: 'listing-a',
+      financeAreaCode: 'B1',
+    }))
+    expect(restored.financeAreaCode).toBe('B1')
+    expect(restored.selectedLeaseCandidateId).toBeNull()
+  })
+
   it('restores independent page agent conversations', () => {
     const restored = restoreSession(JSON.stringify({
       schemaVersion: 8,

@@ -6,7 +6,9 @@ from time import monotonic, perf_counter
 from uuid import uuid4
 
 from fastapi import Request
+from starlette.datastructures import Headers, MutableHeaders
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.app.core.errors import error_response
 
@@ -14,35 +16,87 @@ from backend.app.core.errors import error_response
 logger = logging.getLogger("kb_recommender.request")
 
 
-class RequestContextMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, *, max_request_bytes: int) -> None:
-        super().__init__(app)
+class RequestContextMiddleware:
+    def __init__(self, app: ASGIApp, *, max_request_bytes: int) -> None:
+        self.app = app
         self.max_request_bytes = max_request_bytes
 
-    async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get("x-request-id") or str(uuid4())
-        request.state.request_id = request_id
-        content_length = request.headers.get("content-length")
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = Headers(scope=scope)
+        request_id = headers.get("x-request-id") or str(uuid4())
+        scope.setdefault("state", {})["request_id"] = request_id
+        content_length = headers.get("content-length")
         try:
-            request_bytes = int(content_length) if content_length else 0
+            declared_bytes = int(content_length) if content_length else None
         except ValueError:
-            request_bytes = 0
-        if request_bytes > self.max_request_bytes:
-            return error_response(413, "REQUEST_TOO_LARGE", "요청 본문이 너무 큽니다.", request_id)
+            declared_bytes = None
+
         started = perf_counter()
-        response = await call_next(request)
+        status_code = 500
+
+        async def send_with_context(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = int(message["status"])
+                response_headers = MutableHeaders(scope=message)
+                response_headers["X-Request-ID"] = request_id
+                response_headers["X-Process-Time-Ms"] = f"{(perf_counter() - started) * 1000:.2f}"
+            await send(message)
+
+        async def reject_oversized_request() -> None:
+            response = error_response(
+                413,
+                "REQUEST_TOO_LARGE",
+                "요청 본문이 너무 큽니다.",
+                request_id,
+            )
+            await response(scope, receive, send_with_context)
+
+        if declared_bytes is not None and declared_bytes > self.max_request_bytes:
+            await reject_oversized_request()
+        else:
+            buffered_messages: deque[Message] = deque()
+            received_bytes = 0
+            while True:
+                message = await receive()
+                if message["type"] == "http.disconnect":
+                    buffered_messages.append(message)
+                    break
+                if message["type"] != "http.request":
+                    buffered_messages.append(message)
+                    continue
+
+                chunk = message.get("body", b"")
+                received_bytes += len(chunk)
+                if received_bytes > self.max_request_bytes:
+                    await reject_oversized_request()
+                    break
+                buffered_messages.append(message)
+                if not message.get("more_body", False):
+                    break
+
+            if received_bytes <= self.max_request_bytes:
+
+                async def replay_receive() -> Message:
+                    if buffered_messages:
+                        return buffered_messages.popleft()
+                    return await receive()
+
+                await self.app(scope, replay_receive, send_with_context)
+
         elapsed_ms = (perf_counter() - started) * 1000
-        response.headers["X-Request-ID"] = request_id
-        response.headers["X-Process-Time-Ms"] = f"{elapsed_ms:.2f}"
         logger.info(
             "request_id=%s method=%s path=%s status=%s elapsed_ms=%.2f",
             request_id,
-            request.method,
-            request.url.path,
-            response.status_code,
+            scope["method"],
+            scope["path"],
+            status_code,
             elapsed_ms,
         )
-        return response
 
 
 class RecommendationRateLimitMiddleware(BaseHTTPMiddleware):

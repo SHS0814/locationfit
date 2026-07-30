@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildFinancePlanRequest, candidateFromDraft, candidateMissingCosts, emptyFinanceState,
-  emptyLeaseDraft, firstYearLeaseCash, formatKrw, manwonToKrw,
-  validateLeaseDraft, type LeaseCandidateRecord,
+  emptyLeaseDraft, firstYearLeaseCash, formatKrw, isManwonInput, leaseSelectionForArea, manwonToKrw,
+  mergeFinancePlanIfCurrent, validateLeaseDraft, type LeaseCandidateFinanceState,
+  type LeaseCandidateRecord,
 } from './model'
 
 
@@ -19,7 +20,56 @@ describe('finance model', () => {
   it('converts 만원 inputs into integer won values', () => {
     expect(manwonToKrw('5,000')).toBe(50_000_000)
     expect(manwonToKrw('200')).toBe(2_000_000)
-    expect(manwonToKrw('invalid')).toBe(0)
+    expect(manwonToKrw('1.25')).toBe(12_500)
+    expect(() => manwonToKrw('invalid')).toThrow('금액은 0 이상의 숫자')
+    expect(() => manwonToKrw('1.2.3')).toThrow('금액은 0 이상의 숫자')
+    expect(() => manwonToKrw('')).toThrow('금액은 0 이상의 숫자')
+  })
+
+  it('rejects malformed lease money instead of saving it as zero', () => {
+    expect(isManwonInput('1.2')).toBe(true)
+    expect(isManwonInput('1.2.3')).toBe(false)
+    const draft = emptyLeaseDraft()
+    draft.address = '서울시 중구'
+    draft.money.deposit = '1.2.3'
+    draft.money.monthlyRent = '200'
+    expect(validateLeaseDraft(draft)).toBe('보증금 금액은 0 이상의 숫자로 입력해주세요.')
+    const area = {
+      area_code: 'A1', area_name: '테스트상권', industry_code: 'CS100001', industry_name: '한식',
+    } as Parameters<typeof candidateFromDraft>[1]
+    expect(() => candidateFromDraft(draft, area)).toThrow('보증금 금액은 0 이상의 숫자')
+  })
+
+  it('validates malformed optional money fields when they are present', () => {
+    const draft = emptyLeaseDraft()
+    draft.address = '서울시 중구'
+    draft.money.deposit = '5000'
+    draft.money.monthlyRent = '200'
+    draft.money.managementFee = '.'
+    expect(validateLeaseDraft(draft)).toBe('월 관리비 금액은 0 이상의 숫자로 입력해주세요.')
+  })
+
+  it('does not merge a finance plan into inputs changed while the request was pending', () => {
+    const selected = candidate()
+    const requestedState = emptyFinanceState()
+    requestedState.additionalCosts.interior_krw = 10_000_000
+    const requested = buildFinancePlanRequest(selected, requestedState)
+    const plan = { disclosure: '테스트 계획' } as NonNullable<LeaseCandidateFinanceState['plan']>
+
+    expect(mergeFinancePlanIfCurrent(requested, selected, requestedState, plan)).toEqual({
+      ...requestedState,
+      plan,
+    })
+
+    const editedState = {
+      ...requestedState,
+      additionalCosts: { ...requestedState.additionalCosts, interior_krw: 20_000_000 },
+    }
+    expect(mergeFinancePlanIfCurrent(requested, selected, editedState, plan)).toBeNull()
+    expect(editedState.additionalCosts.interior_krw).toBe(20_000_000)
+
+    const editedCandidate = candidate({ depositKrw: selected.depositKrw + 10_000_000 })
+    expect(mergeFinancePlanIfCurrent(requested, editedCandidate, requestedState, plan)).toBeNull()
   })
 
   it('does not calculate or finance a candidate with unknown costs', () => {
@@ -27,6 +77,14 @@ describe('finance model', () => {
     expect(candidateMissingCosts(incomplete)).toEqual(['관리비'])
     expect(firstYearLeaseCash(incomplete)).toBeNull()
     expect(() => buildFinancePlanRequest(incomplete, emptyFinanceState())).toThrow('관리비와 권리금')
+  })
+
+  it('keeps a selected lease candidate only within its own area', () => {
+    const candidates = [candidate({ id: 'listing-a', areaCode: 'A1' }), candidate({ id: 'listing-b', areaCode: 'B1' })]
+    expect(leaseSelectionForArea(candidates, 'listing-a', 'A1')).toBe('listing-a')
+    expect(leaseSelectionForArea(candidates, 'listing-a', 'B1')).toBeNull()
+    expect(leaseSelectionForArea(candidates, 'missing', 'A1')).toBeNull()
+    expect(leaseSelectionForArea(candidates, 'listing-a', null)).toBeNull()
   })
 
   it('calculates comparison cash and builds the selected candidate request', () => {

@@ -4,6 +4,7 @@ import {
   candidateFromDraft,
   draftFromCandidate,
   emptyLeaseDraft,
+  isManwonInput,
   validateLeaseDraft,
   type LeaseCandidateDraft,
   type LeaseCandidateRecord,
@@ -33,10 +34,16 @@ export function LeaseCandidateEditor({ area, existing, onClose, onSave }: {
   }, [existing, area.area_code])
 
   const updateMoney = (key: LeaseMoneyField, value: string) => {
+    if (!isManwonInput(value)) {
+      const label = leaseMoneyFields.find((field) => field.key === key)?.label || '금액'
+      setError(`${label} 입력은 소수점 하나를 포함한 숫자만 사용할 수 있습니다.`)
+      return
+    }
     setDraft((current) => ({
       ...current,
-      money: { ...current.money, [key]: value.replace(/[^0-9.]/g, '') },
+      money: { ...current.money, [key]: value },
     }))
+    setError(null)
   }
 
   const save = () => {
@@ -66,7 +73,7 @@ export function LeaseCandidateEditor({ area, existing, onClose, onSave }: {
               <label><span>층</span><input value={draft.floor} onChange={(event) => setDraft({ ...draft, floor: event.target.value })} /></label>
             </div>
             <div className="lease-editor-fields money">
-              {leaseMoneyFields.map((field) => <label key={field.key}><span>{field.label}{field.optional ? ' · 빈칸=미확인' : ' *'}</span><div><input inputMode="numeric" value={draft.money[field.key]} onChange={(event) => updateMoney(field.key, event.target.value)} /><small>만원</small></div></label>)}
+              {leaseMoneyFields.map((field) => <label key={field.key}><span>{field.label}{field.optional ? ' · 빈칸=미확인' : ' *'}</span><div><input inputMode="decimal" value={draft.money[field.key]} onChange={(event) => updateMoney(field.key, event.target.value)} /><small>만원</small></div></label>)}
             </div>
             <p className="lease-zero-guide">관리비·권리금이 없다고 확인한 경우에는 빈칸 대신 0을 입력하세요.</p>
             <p className="lease-area-warning">이 주소가 선택한 {area.area_name} 검토 대상인지 직접 확인해주세요. 주변 영업 점포는 임대 가능 매물을 뜻하지 않습니다.</p>

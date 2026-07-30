@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { api } from '../../api/client'
 import type { CatalogBenefit, FinancePlanRequest, FinancialVulnerability, RecommendationItem } from '../../types/api'
 import {
@@ -9,6 +9,7 @@ import {
   formatKrw,
   krwToManwon,
   manwonToKrw,
+  mergeFinancePlanIfCurrent,
   type LeaseCandidateFinanceState,
   type LeaseCandidateRecord,
   type StartupMoneyField,
@@ -74,6 +75,8 @@ export function LeaseCandidateWorkspace({
 }) {
   const selected = candidates.find((item) => item.id === selectedId) || null
   const state = selected ? financeById[selected.id] || emptyFinanceState() : null
+  const latestSelection = useRef({ selected, state })
+  latestSelection.current = { selected, state }
   const [planning, setPlanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -85,7 +88,13 @@ export function LeaseCandidateWorkspace({
 
   const updateStartup = (key: StartupMoneyField, input: string) => {
     if (!state) return
-    const value = manwonToKrw(input)
+    let value: number
+    try {
+      value = input.trim() === '' ? 0 : manwonToKrw(input)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '금액을 올바르게 입력해주세요.')
+      return
+    }
     if (key === 'ownCapital') return updateState({ eligibility: { ...state.eligibility, own_capital_krw: value } })
     const map = {
       interior: 'interior_krw', equipment: 'equipment_krw', inventory: 'initial_inventory_krw',
@@ -107,8 +116,17 @@ export function LeaseCandidateWorkspace({
     setPlanning(true)
     setError(null)
     try {
-      const plan = await api.financePlan(buildFinancePlanRequest(selected, state))
-      onFinanceChange(selected.id, { ...state, plan })
+      const requested = buildFinancePlanRequest(selected, state)
+      const requestedCandidateId = selected.id
+      const plan = await api.financePlan(requested)
+      const latest = latestSelection.current
+      if (!latest.selected || latest.selected.id !== requestedCandidateId || !latest.state) return
+      const nextState = mergeFinancePlanIfCurrent(requested, latest.selected, latest.state, plan)
+      if (!nextState) {
+        setError('계산 중 입력이 변경되어 이전 결과를 반영하지 않았습니다. 최신 값으로 다시 계산해주세요.')
+        return
+      }
+      onFinanceChange(requestedCandidateId, nextState)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '자금계획을 만들지 못했습니다.')
     } finally {

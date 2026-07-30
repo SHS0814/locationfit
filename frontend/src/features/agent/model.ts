@@ -19,7 +19,7 @@ import type {
   ActiveMarketLookupQuery,
   WorkspaceAgentScope,
 } from '../../types/api'
-import type { LeaseCandidateFinanceState, LeaseCandidateRecord } from '../finance/model'
+import { leaseSelectionForArea, type LeaseCandidateFinanceState, type LeaseCandidateRecord } from '../finance/model'
 import { normalizePerformanceWeights } from '../recommendation/performanceWeights'
 
 export const AGENT_SESSION_KEY = 'kb-location-agent-session-v9'
@@ -439,6 +439,13 @@ export function restoreSession(raw: string | null): AgentSession {
     const marketLookupIndex = restoredMarketLookup && marketLookupHistory.length > 0
       ? Math.min(Math.max(Number.isInteger(storedLookupIndex) ? storedLookupIndex : marketLookupHistory.length - 1, 0), marketLookupHistory.length - 1)
       : -1
+    const leaseCandidates = workspaceCompatible && Array.isArray(parsed.leaseCandidates) ? parsed.leaseCandidates : []
+    const financeAreaCode = workspaceCompatible && typeof parsed.financeAreaCode === 'string' ? parsed.financeAreaCode : null
+    const selectedLeaseCandidateId = leaseSelectionForArea(
+      leaseCandidates,
+      workspaceCompatible && typeof parsed.selectedLeaseCandidateId === 'string' ? parsed.selectedLeaseCandidateId : null,
+      financeAreaCode,
+    )
     return {
       schemaVersion: 9,
       history: parsed.history.slice(-20),
@@ -468,11 +475,10 @@ export function restoreSession(raw: string | null): AgentSession {
         : ['competitor', 'complementary', 'daily_life', 'other'],
       storeSearch: analysisCompatible && typeof parsed.storeSearch === 'string' ? parsed.storeSearch : '',
       webResearch: analysisCompatible && Array.isArray(parsed.webResearch) ? parsed.webResearch : [],
-      leaseCandidates: workspaceCompatible && Array.isArray(parsed.leaseCandidates) ? parsed.leaseCandidates : [],
+      leaseCandidates,
       leaseFinanceById: workspaceCompatible ? restoreLeaseFinanceStates(parsed.leaseFinanceById) : {},
-      selectedLeaseCandidateId: workspaceCompatible && typeof parsed.selectedLeaseCandidateId === 'string'
-        ? parsed.selectedLeaseCandidateId : null,
-      financeAreaCode: workspaceCompatible && typeof parsed.financeAreaCode === 'string' ? parsed.financeAreaCode : null,
+      selectedLeaseCandidateId,
+      financeAreaCode,
       workspaceChats: workspaceCompatible && parsed.workspaceChats && typeof parsed.workspaceChats === 'object'
         ? {
             stores: Array.isArray(parsed.workspaceChats.stores) ? parsed.workspaceChats.stores.slice(-20) : createInitialWorkspaceChats().stores,
