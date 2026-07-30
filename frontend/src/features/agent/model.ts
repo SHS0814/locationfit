@@ -22,7 +22,8 @@ import type {
 import { leaseSelectionForArea, type LeaseCandidateFinanceState, type LeaseCandidateRecord } from '../finance/model'
 import { normalizePerformanceWeights } from '../recommendation/performanceWeights'
 
-export const AGENT_SESSION_KEY = 'kb-location-agent-session-v9'
+export const AGENT_SESSION_KEY = 'locationfit-agent-session-v9'
+export const AGENT_V9_SESSION_KEY = 'kb-location-agent-session-v9'
 export const AGENT_V8_SESSION_KEY = 'kb-location-agent-session-v8'
 export const AGENT_V7_SESSION_KEY = 'kb-location-agent-session-v7'
 export const AGENT_V6_SESSION_KEY = 'kb-location-agent-session-v6'

@@ -276,7 +276,7 @@ class OpenAIAgentRunner:
             tool_choice="required" if payload.action == "confirm_recommendation" else None,
         )
         agent = Agent(
-            name="KB 입지 추천 상담가",
+            name="로케이션핏 입지 추천 상담가",
             instructions=SYSTEM_INSTRUCTIONS,
             model=self.model,
             model_settings=model_settings,

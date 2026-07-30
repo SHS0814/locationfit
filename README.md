@@ -1,4 +1,4 @@
-# KB AI Challenge — 대화형 AI 입지 추천
+# 로케이션핏 — 대화형 AI 입지 추천
 
 > AI 구성부터 파악하려면 [AI 에이전트 중심 프로젝트 아키텍처](docs/ai-agent-architecture.md)를 읽어주세요. 핵심 에이전트 3개, OpenAI Agents SDK, function tool과 결정론적 서비스의 연결을 현재 코드 기준으로 정리했습니다.
 

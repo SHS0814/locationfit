@@ -16,7 +16,7 @@ def _csv_env(name: str, default: str) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class Settings:
-    app_name: str = os.getenv("APP_NAME", "KB 상권추천 API")
+    app_name: str = os.getenv("APP_NAME", "로케이션핏 API")
     app_env: str = os.getenv("APP_ENV", "development")
     api_prefix: str = "/api/v1"
     database_url: str | None = os.getenv("DATABASE_URL") or None

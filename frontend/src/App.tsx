@@ -13,6 +13,7 @@ import { WorkspaceAgentPanel } from './features/agent/WorkspaceAgentPanel'
 import {
   AGENT_LEGACY_SESSION_KEY,
   AGENT_SESSION_KEY,
+  AGENT_V9_SESSION_KEY,
   AGENT_V8_SESSION_KEY,
   AGENT_V7_SESSION_KEY,
   AGENT_V6_SESSION_KEY,
@@ -55,6 +56,7 @@ export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)
+      || sessionStorage.getItem(AGENT_V9_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V8_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V7_SESSION_KEY)
       || sessionStorage.getItem(AGENT_V6_SESSION_KEY)
@@ -463,6 +465,7 @@ export default function App() {
   const resetConversationAndAnalysis = () => {
     if (!window.confirm('대화와 모든 분석 결과를 초기화할까요?')) return
     sessionStorage.removeItem(AGENT_SESSION_KEY)
+    sessionStorage.removeItem(AGENT_V9_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V8_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V7_SESSION_KEY)
     sessionStorage.removeItem(AGENT_V6_SESSION_KEY)
@@ -1086,7 +1089,7 @@ export default function App() {
         </section>
       </main>
       {leaseEditorArea && <LeaseCandidateEditor area={leaseEditorArea} existing={editingLeaseCandidate} onClose={closeLeaseEditor} onSave={saveLeaseCandidate} />}
-      <footer>KB AI Challenge · 서울 열린데이터광장·소상공인시장진흥공단 기반 분석 · 미래 매출을 보장하지 않습니다.</footer>
+      <footer>로케이션핏 · 서울 열린데이터광장·소상공인시장진흥공단 기반 분석 · 미래 매출을 보장하지 않습니다.</footer>
     </div>
   )
 }

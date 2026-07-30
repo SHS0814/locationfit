@@ -70,7 +70,7 @@ class OpenAIWebResearchRunner:
             raise AgentUnavailableError("OpenAI Agents SDK가 설치되지 않았습니다.") from exc
         set_tracing_disabled(True)
         agent = Agent(
-            name="KB 상권 웹 리서처",
+            name="로케이션핏 상권 웹 리서처",
             instructions=RESEARCH_INSTRUCTIONS,
             model=self.model,
             model_settings=ModelSettings(
