@@ -2,12 +2,13 @@ pandas
 numpy
 scipy
 scikit-learn
-pyarrow
+pyarrow>=23.0.1,<24
 geopandas
 shapely
 matplotlib
 plotly
 jupyter
+jupyterlab>=4.6.2,<5
 ipykernel
 pyyaml
 python-dotenv
