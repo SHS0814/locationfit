@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from shapely.geometry import shape
-
 
 INDEX_FILE = "area_recommendation_index.parquet"
 EVIDENCE_FILE = "area_industry_evidence.parquet"

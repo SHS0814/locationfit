@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-from pathlib import Path
 import hashlib
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.app.main import app
 from backend.app.schemas.recommendation import RecommendationRequestSchema
 from backend.app.services.cost_provider import (
     ParquetCommercialCostProvider,
+    UnavailableCostProvider,
     calculate_budget_fit,
     calculate_lease_plan,
 )
 from backend.app.services.recommender_service import RecommenderService
-from backend.app.main import app
-
 
 ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "artifacts/current"
 
@@ -56,6 +56,13 @@ def test_estimate_budget_fit_and_lease_plan_formulas() -> None:
     assert plan.first_year_cash_outlay_krw == 124_000_000
     assert plan.remaining_startup_budget_krw == 76_000_000
     assert plan.deposit_share_of_budget == 0.5
+
+
+def test_cost_availability_check_does_not_materialize_area_observations() -> None:
+    provider = sample_provider(["A", "B"])
+
+    assert provider.unavailable_reason is None
+    assert "정적 산출물이 없습니다" in UnavailableCostProvider().unavailable_reason
 
 
 def test_missing_floor_uses_same_period_all_floor_with_disclosure() -> None:

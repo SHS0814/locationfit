@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from difflib import SequenceMatcher
 from pathlib import Path
-import re
 from typing import Any
 
 import pandas as pd
@@ -92,7 +92,7 @@ def check_historical_compatibility(
     schema_rows: list[dict[str, Any]] = []
     for dataset, annual_schemas in schemas.items():
         years = sorted(annual_schemas)
-        for previous, current in zip(years, years[1:]):
+        for previous, current in zip(years, years[1:], strict=False):
             old = set(annual_schemas[previous])
             new = set(annual_schemas[current])
             added = new - old
@@ -137,11 +137,14 @@ def check_historical_compatibility(
             area_rows.append(
                 {"dataset": dataset, "from_year": year, "to_year": year, "comparison": "year_count", "from_count": len(annual_codes[year])}
             )
-        for previous, current in zip(years, years[1:]):
+        for previous, current in zip(years, years[1:], strict=False):
             old, new = annual_codes[previous], annual_codes[current]
             intersection = old & new
             changed_names = sum(
-                bool(area_names[dataset][previous].get(code) - area_names[dataset][current].get(code, set()))
+                bool(
+                    area_names[dataset][previous].get(code, set())
+                    - area_names[dataset][current].get(code, set())
+                )
                 for code in intersection
             )
             changed_name_codes = sorted(
@@ -173,11 +176,14 @@ def check_historical_compatibility(
     industry_rows: list[dict[str, Any]] = []
     for dataset, annual_codes in industry_codes.items():
         years = sorted(annual_codes)
-        for previous, current in zip(years, years[1:]):
+        for previous, current in zip(years, years[1:], strict=False):
             old, new = annual_codes[previous], annual_codes[current]
             intersection = old & new
             changed_names = sum(
-                bool(industry_names[dataset][previous].get(code) - industry_names[dataset][current].get(code, set()))
+                bool(
+                    industry_names[dataset][previous].get(code, set())
+                    - industry_names[dataset][current].get(code, set())
+                )
                 for code in intersection
             )
             changed_name_codes = sorted(

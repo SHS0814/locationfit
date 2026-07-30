@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import type { CatalogBenefit, FinancePlanRequest, FinancialVulnerability, RecommendationItem } from '../../types/api'
 import {
@@ -76,7 +76,9 @@ export function LeaseCandidateWorkspace({
   const selected = candidates.find((item) => item.id === selectedId) || null
   const state = selected ? financeById[selected.id] || emptyFinanceState() : null
   const latestSelection = useRef({ selected, state })
-  latestSelection.current = { selected, state }
+  useEffect(() => {
+    latestSelection.current = { selected, state }
+  }, [selected, state])
   const [planning, setPlanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

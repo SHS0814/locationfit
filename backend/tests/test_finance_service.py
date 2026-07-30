@@ -11,7 +11,6 @@ from backend.app.schemas.finance import (
 )
 from backend.app.services.finance_service import FinancePlanService, calculate_funding
 
-
 CATALOG_ROOT = Path(__file__).resolve().parents[2] / "config/financial_catalog"
 CATALOG = load_curated_catalog(CATALOG_ROOT)
 

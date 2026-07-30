@@ -4,7 +4,6 @@ import pytest
 
 from backend.app.services.recommender_service import RecommenderService
 
-
 ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "artifacts/current"
 
 

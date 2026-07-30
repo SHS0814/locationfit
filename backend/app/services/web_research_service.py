@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict, is_dataclass
-from datetime import UTC, datetime
 import json
 import os
+from dataclasses import asdict, is_dataclass
+from datetime import UTC, datetime
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
@@ -12,7 +12,6 @@ from backend.app.schemas.research import WebResearchRequest
 from backend.app.services.agent_service import AgentTimeoutError, AgentUnavailableError
 from backend.app.services.recommender_service import RecommenderService
 from backend.app.services.store_service import CommercialStoreService
-
 
 RESEARCH_INSTRUCTIONS = """
 당신은 서울 창업 입지의 최신 외부 정보를 조사하는 리서치 에이전트다.

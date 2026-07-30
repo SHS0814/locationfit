@@ -29,7 +29,6 @@ from backend.app.financial_catalog.contracts import (
 )
 from backend.app.financial_catalog.loader import catalog_digest
 
-
 CATALOG_ADVISORY_LOCK = 4_601_728_031
 
 

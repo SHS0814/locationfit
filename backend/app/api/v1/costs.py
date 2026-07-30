@@ -5,7 +5,6 @@ from backend.app.schemas.cost import LeasePlanRequest, LeasePlanResponse
 from backend.app.services.cost_provider import calculate_lease_plan
 from backend.app.services.recommender_service import RecommenderService
 
-
 router = APIRouter(tags=["commercial-costs"])
 
 

@@ -12,13 +12,12 @@ from backend.app.main import app
 from backend.app.schemas.agent import WorkspaceAgentRequest
 from backend.app.services.finance_service import FinancePlanService
 from backend.app.services.workspace_agent_service import (
-    WorkspaceAgentExecution,
     OpenAIWorkspaceAgentRunner,
     WorkspaceAgentDecision,
+    WorkspaceAgentExecution,
     WorkspaceAgentService,
     WorkspaceToolRuntime,
 )
-
 
 CATALOG = load_curated_catalog(
     Path(__file__).resolve().parents[2] / "config/financial_catalog"

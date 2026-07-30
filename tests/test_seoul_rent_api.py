@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import requests
 import pytest
+import requests
 
 from src.data.seoul_rent_api import SeoulRentApiError, SeoulRentClient
 

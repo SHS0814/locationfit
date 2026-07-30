@@ -1,8 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from backend.app.core.middleware import RequestContextMiddleware
-
+from backend.app.core.middleware import RecommendationRateLimitMiddleware, RequestContextMiddleware
 
 MAX_REQUEST_BYTES = 16
 
@@ -55,6 +54,55 @@ def test_request_size_limit_rejects_body_larger_than_declared() -> None:
         )
 
     _assert_too_large(response)
+
+
+def test_store_lookup_get_is_rate_limited_before_reaching_route() -> None:
+    calls = 0
+    app = FastAPI()
+    app.add_middleware(
+        RecommendationRateLimitMiddleware,
+        limit=30,
+        agent_limit=10,
+        store_limit=2,
+        window_seconds=60,
+    )
+
+    @app.get("/api/v1/areas/{area_code}/stores")
+    async def stores(area_code: str) -> dict[str, str]:
+        nonlocal calls
+        calls += 1
+        return {"area_code": area_code}
+
+    with TestClient(app, client=("store-client", 50_000)) as client:
+        first = client.get("/api/v1/areas/A1/stores")
+        second = client.get("/api/v1/areas/A2/stores")
+        limited = client.get("/api/v1/areas/A3/stores")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert limited.status_code == 429
+    assert limited.json()["error"]["code"] == "STORE_RATE_LIMIT_EXCEEDED"
+    assert 1 <= int(limited.headers["retry-after"]) <= 60
+    assert calls == 2
+
+
+def test_store_rate_limit_does_not_apply_to_other_get_routes() -> None:
+    app = FastAPI()
+    app.add_middleware(
+        RecommendationRateLimitMiddleware,
+        limit=30,
+        agent_limit=10,
+        store_limit=1,
+    )
+
+    @app.get("/api/v1/health/live")
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    with TestClient(app, client=("health-client", 50_001)) as client:
+        responses = [client.get("/api/v1/health/live") for _ in range(3)]
+
+    assert [response.status_code for response in responses] == [200, 200, 200]
 
 
 def _test_app() -> FastAPI:

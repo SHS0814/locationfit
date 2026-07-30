@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(PROJECT_ROOT / ".env", override=False)
@@ -30,6 +29,7 @@ class Settings:
     )
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "30"))
     agent_rate_limit_per_minute: int = int(os.getenv("AGENT_RATE_LIMIT_PER_MINUTE", "10"))
+    store_rate_limit_per_minute: int = int(os.getenv("STORE_RATE_LIMIT_PER_MINUTE", "5"))
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
     agent_timeout_seconds: float = float(os.getenv("AGENT_TIMEOUT_SECONDS", "30"))
     workspace_agent_timeout_seconds: float = float(

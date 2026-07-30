@@ -13,7 +13,6 @@ from backend.app.services.recommender_service import RecommenderService
 from backend.app.services.store_service import CommercialStoreService, StoreFetchResult
 from backend.app.services.web_research_service import WebResearchService, _collect_sources
 
-
 ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "artifacts/current"
 
 

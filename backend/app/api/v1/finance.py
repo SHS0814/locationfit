@@ -11,7 +11,6 @@ from backend.app.schemas.finance import (
 )
 from backend.app.services.finance_service import FinancePlanService
 
-
 router = APIRouter(tags=["finance"])
 
 

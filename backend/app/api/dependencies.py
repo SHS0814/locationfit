@@ -1,15 +1,14 @@
-from fastapi import Request
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db_session
 from backend.app.financial_catalog.contracts import CatalogBundle
 from backend.app.financial_catalog.persistence import bundle_from_database
 from backend.app.services.agent_service import LocationAgentService
+from backend.app.services.finance_service import FinancePlanService
 from backend.app.services.recommender_service import RecommenderService
 from backend.app.services.store_service import CommercialStoreService
 from backend.app.services.web_research_service import WebResearchService
-from backend.app.services.finance_service import FinancePlanService
 from backend.app.services.workspace_agent_service import WorkspaceAgentService
 
 

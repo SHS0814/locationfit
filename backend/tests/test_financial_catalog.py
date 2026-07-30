@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
-import traceback
 
-import pytest
 import httpx
+import pytest
 
 from backend.app.db.models import ProductStatus
 from backend.app.financial_catalog.bizinfo import BizinfoClient, merge_bizinfo_items
 from backend.app.financial_catalog.loader import load_curated_catalog
 from backend.app.financial_catalog.validation import validate_catalog
-
 
 CATALOG_ROOT = Path(__file__).resolve().parents[2] / "config/financial_catalog"
 CHECKED_AT = datetime(2026, 7, 29, tzinfo=UTC)

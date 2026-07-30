@@ -12,7 +12,6 @@ import pandas as pd
 from src.data.config import generate_quarters, load_datasets_config
 from src.utils.paths import INTERIM_DIR, OUTPUT_DIR, PROCESSED_DIR, PROJECT_ROOT
 
-
 KEYS = ["area_code", "industry_code"]
 PANEL_KEYS = ["quarter", *KEYS]
 RECENT_QUARTERS = ["20251", "20252", "20253", "20254"]

@@ -7,13 +7,13 @@ import numpy as np
 import pandas as pd
 
 from src.models.area_recommender import (
-    AreaRecommender,
     EVIDENCE_WEIGHTS,
-    RecommendationRequest,
     STRATEGY_GROUP_WEIGHTS,
+    AreaRecommender,
+    RecommendationRequest,
     build_preference_features,
-    score_industry_evidence,
     normalize_performance_weights,
+    score_industry_evidence,
     strategy_evidence_weights,
     validate_request,
     weighted_euclidean_scores,

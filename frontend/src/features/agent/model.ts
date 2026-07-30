@@ -424,7 +424,8 @@ export function restoreSession(raw: string | null): AgentSession {
     const workspaceCompatible = currentSchema || parsedVersion === 8
     const analysisCompatible = currentSchema
     const legacyDraft = parsed.draft as Partial<RecommendationDraft> & { commercial_property_type?: unknown; floor?: string | null }
-    const { commercial_property_type: _removedPropertyType, ...draftValues } = legacyDraft
+    const draftValues = { ...legacyDraft }
+    delete draftValues.commercial_property_type
     const floor = legacyDraft.floor && ['all', 'f1', 'non_f1'].includes(legacyDraft.floor)
       ? legacyDraft.floor as RecommendationDraft['floor']
       : null

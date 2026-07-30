@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 import hashlib
 import json
 import math
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal, Protocol
 
 import pandas as pd
-
 
 FloorType = Literal["all", "f1", "non_f1"]
 
@@ -19,24 +18,6 @@ FLOOR_NAMES: dict[FloorType, str] = {
     "f1": "1층",
     "non_f1": "1층 외",
 }
-
-
-@dataclass(frozen=True)
-class CommercialCostObservation:
-    area_code: str
-    monthly_rent_krw: float | None
-    deposit_krw: float | None
-    unit_area_sqm: float | None
-    reference_period: str
-    source: str
-    reliability: float | None
-
-
-@dataclass(frozen=True)
-class CommercialCostResult:
-    availability: Literal["available", "unavailable"]
-    observations: tuple[CommercialCostObservation, ...] = ()
-    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,7 +67,8 @@ class LeasePlan:
 
 
 class CommercialCostProvider(Protocol):
-    def get_area_costs(self, area_codes: list[str]) -> CommercialCostResult: ...
+    @property
+    def unavailable_reason(self) -> str | None: ...
 
     def estimate(
         self,
@@ -161,13 +143,20 @@ class ParquetCommercialCostProvider:
         invalid_floors = set(observations["floor"].dropna().astype(str)) - set(FLOOR_NAMES)
         if invalid_floors:
             raise RuntimeError(f"상가 비용 아티팩트의 층 코드가 올바르지 않습니다: {sorted(invalid_floors)}")
+        invalid_geographies = set(observations["rent_basis_geography"].dropna().astype(str)) - {
+            "admin_dong",
+            "district",
+        }
+        if invalid_geographies:
+            raise RuntimeError(
+                f"상가 비용 아티팩트의 임대료 기준 지역이 올바르지 않습니다: {sorted(invalid_geographies)}"
+            )
         self.observations = observations.copy()
         for column in (
             "area_code", "area_name", "admin_dong_name", "rent_basis_geography",
             "rent_basis_name", "floor", "reference_period",
         ):
             self.observations[column] = self.observations[column].astype(str)
-        self.latest_period = str(self.observations["reference_period"].max())
 
     @classmethod
     def from_artifact_dir(cls, artifact_dir: Path) -> "ParquetCommercialCostProvider":
@@ -200,24 +189,9 @@ class ParquetCommercialCostProvider:
                 )
         return provider
 
-    def get_area_costs(self, area_codes: list[str]) -> CommercialCostResult:
-        selected = self.observations
-        if area_codes:
-            selected = selected.loc[selected["area_code"].isin(map(str, area_codes))]
-        latest = self.latest_period
-        rows = tuple(
-            CommercialCostObservation(
-                area_code=str(row.area_code),
-                monthly_rent_krw=None,
-                deposit_krw=None,
-                unit_area_sqm=None,
-                reference_period=latest,
-                source=SOURCE_NAME,
-                reliability=None,
-            )
-            for row in selected[["area_code"]].drop_duplicates().itertuples(index=False)
-        )
-        return CommercialCostResult(availability="available", observations=rows)
+    @property
+    def unavailable_reason(self) -> None:
+        return None
 
     def options(self) -> list[dict[str, str]]:
         return _cost_options()
@@ -249,13 +223,20 @@ class ParquetCommercialCostProvider:
         conversion_rate = float(row["annual_conversion_rate"])
         if conversion_rate > 1:
             conversion_rate /= 100.0
+        raw_basis_geography = str(row["rent_basis_geography"])
+        if raw_basis_geography == "admin_dong":
+            basis_geography: Literal["admin_dong", "district"] = "admin_dong"
+        elif raw_basis_geography == "district":
+            basis_geography = "district"
+        else:
+            raise RuntimeError(f"상가 비용 아티팩트의 임대료 기준 지역이 올바르지 않습니다: {raw_basis_geography}")
         return RentalEstimate(
             area_code=str(row["area_code"]),
             area_name=str(row["area_name"]),
             admin_dong_name=str(row["admin_dong_name"]),
-            rent_basis_geography=str(row["rent_basis_geography"]),
+            rent_basis_geography=basis_geography,
             rent_basis_name=str(row["rent_basis_name"]),
-            geography_fallback_used=str(row["rent_basis_geography"]) == "district",
+            geography_fallback_used=basis_geography == "district",
             floor=floor,
             rent_basis_floor=basis_floor,
             fallback_used=basis_floor != floor,
@@ -275,14 +256,11 @@ class ParquetCommercialCostProvider:
 
 
 class UnavailableCostProvider:
-    def get_area_costs(self, area_codes: list[str]) -> CommercialCostResult:
-        del area_codes
-        return CommercialCostResult(
-            availability="unavailable",
-            reason=(
-                "서울시 상권분석서비스 임대시세 정적 산출물이 없습니다. "
-                "수동 갱신 스크립트를 실행하면 예산 점수가 활성화됩니다."
-            ),
+    @property
+    def unavailable_reason(self) -> str:
+        return (
+            "서울시 상권분석서비스 임대시세 정적 산출물이 없습니다. "
+            "수동 갱신 스크립트를 실행하면 예산 점수가 활성화됩니다."
         )
 
     def estimate(

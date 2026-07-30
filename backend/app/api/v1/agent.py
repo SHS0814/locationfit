@@ -5,7 +5,6 @@ from backend.app.schemas.agent import AgentTurnRequest, AgentTurnResponse, Works
 from backend.app.services.agent_service import LocationAgentService
 from backend.app.services.workspace_agent_service import WorkspaceAgentService
 
-
 router = APIRouter(tags=["agent"])
 
 

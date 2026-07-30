@@ -8,7 +8,6 @@ from sqlalchemy import create_engine, pool
 from backend.app.core.config import settings
 from backend.app.db import Base  # imports all models into Base.metadata
 
-
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

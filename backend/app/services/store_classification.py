@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-
 StoreRelation = Literal["competitor", "complementary", "daily_life", "other"]
 
 

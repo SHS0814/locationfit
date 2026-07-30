@@ -22,8 +22,7 @@ from backend.app.services.market_lookup_service import (
     MarketLookupService,
 )
 from backend.recommender import AreaRecommender, RecommendationRequest
-from src.models.area_recommender import RecommendationResult, STRATEGY_GROUP_WEIGHTS
-
+from src.models.area_recommender import STRATEGY_GROUP_WEIGHTS, RecommendationResult
 
 AGE_OPTIONS = [
     {"code": "10", "name": "10대"}, {"code": "20", "name": "20대"},
@@ -409,8 +408,11 @@ class RecommenderService:
         rental_payload = payload if has_rent_conditions else payload.model_copy(
             update=DEFAULT_RENT_REFERENCE
         )
+        rental_area_sqm = rental_payload.rentable_area_sqm
+        if rental_area_sqm is None:
+            raise RuntimeError("임대료 보고서의 기준 면적이 설정되지 않았습니다.")
         rental_basis = (
-            f"입력 조건 · {float(rental_payload.rentable_area_sqm):g}㎡ · "
+            f"입력 조건 · {float(rental_area_sqm):g}㎡ · "
             f"{rental_payload.floor}"
             if has_rent_conditions
             else "기본 참고값 · 1층 · 10평(33.1㎡)"

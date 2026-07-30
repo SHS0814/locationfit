@@ -4,18 +4,17 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import hashlib
 import json
-from pathlib import Path
 import tempfile
-from typing import Any
 import unicodedata
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 from src.data.seoul_rent_api import SeoulRentClient
-
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ARTIFACT_DIR = ROOT / "backend/artifacts/current"

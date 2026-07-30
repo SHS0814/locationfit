@@ -17,7 +17,6 @@ from backend.app.financial_catalog.contracts import (
 )
 from backend.app.schemas.finance import FinancePlanRequest
 
-
 UNKNOWN = object()
 ROLE_PRIORITY = {
     OrganizationRole.OPERATOR: 0,

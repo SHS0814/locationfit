@@ -4,7 +4,6 @@ from backend.app.api.dependencies import get_web_research_service
 from backend.app.schemas.research import WebResearchRequest, WebResearchResponse
 from backend.app.services.web_research_service import WebResearchService
 
-
 router = APIRouter(tags=["agent-research"])
 
 

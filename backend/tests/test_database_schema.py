@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from decimal import Decimal
 import json
 import os
+from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from sqlalchemy import BigInteger, Numeric, create_engine, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import configure_mappers
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, configure_mappers
 
 from backend.app.db import (
     AcquisitionMode,
@@ -33,7 +32,6 @@ from backend.app.db import (
 )
 from backend.app.financial_catalog.persistence import bundle_from_database
 from backend.app.financial_catalog.workflow import apply_preview, preview_catalog
-
 
 EXPECTED_TABLES = {
     "organizations",

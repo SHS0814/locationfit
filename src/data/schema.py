@@ -6,7 +6,6 @@ from collections.abc import Iterable
 
 import pandas as pd
 
-
 COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "quarter": ("기준_년분기_코드", "기준년분기코드", "STDR_YYQU_CD", "quarter"),
     "area_code": ("상권_코드", "상권코드", "TRDAR_CD", "area_code"),

@@ -4,7 +4,6 @@ from backend.app.api.dependencies import get_store_service
 from backend.app.schemas.store import AreaStoresResponse
 from backend.app.services.store_service import CommercialStoreService
 
-
 router = APIRouter(tags=["area-stores"])
 
 

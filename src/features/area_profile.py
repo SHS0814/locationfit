@@ -12,7 +12,6 @@ import pandas as pd
 from src.data.config import generate_quarters, load_datasets_config
 from src.utils.paths import INTERIM_DIR, OUTPUT_DIR, PROCESSED_DIR, PROJECT_ROOT
 
-
 KEYS = ["quarter", "area_code"]
 CORE_BLOCKS = ["floating_population", "resident_population", "worker_population", "stores"]
 SUPPLEMENTAL_BLOCKS = ["facilities", "apartments", "commercial_change"]

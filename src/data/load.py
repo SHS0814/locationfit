@@ -1,6 +1,8 @@
 from __future__ import annotations
-from pathlib import Path
+
 import zipfile
+from pathlib import Path
+
 import pandas as pd
 
 SUPPORTED_SUFFIXES = {".csv", ".parquet", ".xlsx", ".xls"}
@@ -35,9 +37,12 @@ def detect_csv_encoding(path: Path) -> str:
 def read_table(path: Path) -> pd.DataFrame:
     """Read one supported CSV, parquet or Excel file."""
     suffix = path.suffix.lower()
-    if suffix == ".csv": return read_csv_robust(path)
-    if suffix == ".parquet": return pd.read_parquet(path)
-    if suffix in {".xlsx", ".xls"}: return pd.read_excel(path)
+    if suffix == ".csv":
+        return read_csv_robust(path)
+    if suffix == ".parquet":
+        return pd.read_parquet(path)
+    if suffix in {".xlsx", ".xls"}:
+        return pd.read_excel(path)
     raise ValueError(f"지원하지 않는 파일 형식입니다: {path}")
 
 def read_folder(folder: Path) -> pd.DataFrame:

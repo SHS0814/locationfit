@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 import shutil
 from datetime import datetime, timezone
+from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
 from pyproj import Transformer
 from shapely import make_valid, set_precision
 from shapely.geometry import mapping
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 SOURCE_DIR = PROJECT_ROOT / "data/processed"

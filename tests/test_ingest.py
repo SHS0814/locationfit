@@ -4,7 +4,6 @@ import pytest
 from src.data import ingest as ingest_module
 from src.data.ingest import stable_frame_digest, validate_preserved_interim
 
-
 KEYS = ["quarter", "area_code", "industry_code"]
 
 

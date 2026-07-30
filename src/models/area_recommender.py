@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import asdict, dataclass, replace
 import json
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Literal, TypedDict
 
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 from sklearn.preprocessing import RobustScaler
 
-from src.utils.paths import INTERIM_DIR, OUTPUT_DIR, PROCESSED_DIR, PROJECT_ROOT
-
+from src.utils.paths import PROJECT_ROOT
 
 FINAL_WEIGHTS = {"condition_fit_score": 0.60, "reliability_adjusted_evidence_score": 0.40}
 EVIDENCE_WEIGHTS: dict[str, tuple[float, Literal["positive", "negative"]]] = {
@@ -32,6 +31,7 @@ EVIDENCE_WEIGHTS: dict[str, tuple[float, Literal["positive", "negative"]]] = {
     "net_store_growth_rate": (0.04, "positive"),
 }
 RecommendationStrategy = Literal["balanced", "condition_fit", "growth", "stability"]
+PreferenceDirection = Literal["high", "low"]
 POLICY_VERSION = "strategy-v1"
 STRATEGY_FINAL_WEIGHTS: dict[str, dict[str, float]] = {
     "balanced": FINAL_WEIGHTS,
@@ -126,8 +126,8 @@ class RecommendationRequest:
     medical_facility_importance: float = 0.0
     shopping_facility_importance: float = 0.0
     culture_facility_importance: float = 0.0
-    store_density_preference: str | None = None
-    franchise_preference: str | None = None
+    store_density_preference: PreferenceDirection | None = None
+    franchise_preference: PreferenceDirection | None = None
     preferred_districts: tuple[str, ...] = ()
     excluded_districts: tuple[str, ...] = ()
     min_data_reliability: float = 0.0
@@ -143,8 +143,15 @@ class PreferenceFeature:
     input_field: str
     feature: str
     weight: float
-    direction: Literal["high", "low"]
+    direction: PreferenceDirection
     label: str
+
+
+class _LabeledContribution(TypedDict):
+    factor: str
+    feature: str
+    fit_score: float
+    weight: float
 
 
 @dataclass(frozen=True)
@@ -587,7 +594,7 @@ class AreaRecommender:
         contribution_lookup: dict[str, dict[str, float]],
     ) -> tuple[str, str, str, str]:
         area_contributions = contribution_lookup.get(str(row["area_code"]), {})
-        labeled = []
+        labeled: list[_LabeledContribution] = []
         for preference in preferences:
             key = f"{preference.input_field}:{preference.feature}"
             if key in area_contributions:
@@ -793,8 +800,22 @@ def rank_correlation(first: pd.DataFrame, second: pd.DataFrame, *, n: int = 10) 
 
 def perturb_importances(request: RecommendationRequest, factor: float) -> RecommendationRequest:
     """Scale explicit numeric importance fields for sensitivity analysis."""
-    changes = {field: float(np.clip(getattr(request, field) * factor, 0, 1)) for field in IMPORTANCE_FIELDS}
-    return replace(request, **changes)
+    def scaled(field: str) -> float:
+        return float(np.clip(getattr(request, field) * factor, 0, 1))
+
+    return replace(
+        request,
+        weekend_importance=scaled("weekend_importance"),
+        floating_population_importance=scaled("floating_population_importance"),
+        resident_population_importance=scaled("resident_population_importance"),
+        worker_population_importance=scaled("worker_population_importance"),
+        apartment_importance=scaled("apartment_importance"),
+        transport_facility_importance=scaled("transport_facility_importance"),
+        education_facility_importance=scaled("education_facility_importance"),
+        medical_facility_importance=scaled("medical_facility_importance"),
+        shopping_facility_importance=scaled("shopping_facility_importance"),
+        culture_facility_importance=scaled("culture_facility_importance"),
+    )
 
 
 def scenario_suite(

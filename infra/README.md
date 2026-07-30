@@ -71,6 +71,7 @@ SPA fallback을 지원하는 정적 호스팅/CDN을 사용한다. 컨테이너 
 - liveness: `/api/v1/health/live`
 - 필수 변수: `APP_ENV=production`, `CORS_ORIGINS=https://<frontend-domain>`, `OPENAI_API_KEY`
 - 에이전트 변수: `OPENAI_MODEL=gpt-5.4-mini`, `AGENT_TIMEOUT_SECONDS=30`, `AGENT_MAX_TURNS=4`, `AGENT_RATE_LIMIT_PER_MINUTE=10`
+- 외부 점포 API 보호: `STORE_RATE_LIMIT_PER_MINUTE=5`(클라이언트별 1분 GET 한도)
 
 배포 시 `backend/artifacts/current`가 이미지에 포함되므로 모델과 데이터 버전은 이미지
 태그와 함께 불변으로 관리한다. API 키나 비밀값은 이미지와 Git에 포함하지 않는다.

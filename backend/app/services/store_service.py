@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections import Counter
-from dataclasses import dataclass
-from datetime import UTC, datetime
 import hashlib
 import json
 import time
+from collections import Counter
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Callable, Protocol
 from urllib.parse import unquote
 
@@ -16,7 +16,6 @@ from shapely.geometry.base import BaseGeometry
 
 from backend.app.services.recommender_service import RecommenderService
 from backend.app.services.store_classification import COMPETITOR_TERMS, classify_store
-
 
 STORE_SOURCE = "소상공인시장진흥공단 상가(상권)정보 API"
 STORE_DISCLOSURE = (
@@ -44,10 +43,13 @@ class StoreProvider(Protocol):
 
 
 def _as_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], int, str | None, str, str]:
-    if isinstance(payload.get("response"), dict):
-        payload = payload["response"]
-    header = payload.get("header") if isinstance(payload.get("header"), dict) else {}
-    body = payload.get("body") if isinstance(payload.get("body"), dict) else payload
+    response = payload.get("response")
+    if isinstance(response, dict):
+        payload = response
+    raw_header = payload.get("header")
+    header: dict[str, Any] = raw_header if isinstance(raw_header, dict) else {}
+    raw_body = payload.get("body")
+    body: dict[str, Any] = raw_body if isinstance(raw_body, dict) else payload
     result_code = str(
         header.get("resultCode") or body.get("resultCode") or payload.get("resultCode") or ""
     )
@@ -257,9 +259,13 @@ class CommercialStoreService:
         for row in rows:
             store_id = self._optional(row, "bizesId")
             name = self._optional(row, "bizesNm")
+            raw_longitude = row.get("lon")
+            raw_latitude = row.get("lat")
+            if raw_longitude is None or raw_latitude is None:
+                continue
             try:
-                longitude = float(row.get("lon"))
-                latitude = float(row.get("lat"))
+                longitude = float(raw_longitude)
+                latitude = float(raw_latitude)
             except (TypeError, ValueError):
                 continue
             if 37 <= longitude <= 38 and 126 <= latitude <= 128:

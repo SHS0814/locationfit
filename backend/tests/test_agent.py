@@ -14,7 +14,6 @@ from backend.app.schemas.agent import (
 from backend.app.services.agent_service import AgentExecution, LocationAgentService
 from backend.app.services.recommender_service import RecommenderService
 
-
 ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "artifacts/current"
 
 

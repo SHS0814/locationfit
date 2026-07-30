@@ -19,7 +19,7 @@
 ```bash
 # 터미널 1: API
 source .venv/bin/activate
-pip install -r backend/requirements.txt
+pip install -r requirements.lock
 uvicorn backend.app.main:app --reload
 
 # 터미널 2: 웹
@@ -51,6 +51,7 @@ SBIZ_STORE_API_BASE_URL=https://apis.data.go.kr/B553077/api/open/sdsc2
 STORE_CACHE_TTL_SECONDS=86400
 STORE_STALE_TTL_SECONDS=604800
 STORE_API_TIMEOUT_SECONDS=15
+STORE_RATE_LIMIT_PER_MINUTE=5
 ```
 
 - `GET /api/v1/areas/{area_code}/stores?industry_code={code}`: 선택 상권 업소와 관계별 요약 조회
@@ -193,7 +194,7 @@ PYTHONPATH=. .venv/bin/python scripts/refresh_seoul_commercial_rent.py
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.lock
 cp .env.example .env
 # .env에 SEOUL_API_KEY 입력
 ```
@@ -302,11 +303,34 @@ raw 및 interim 모두 완전 중복과 설정 grain 키 중복이 0이며, 모�
 
 상권 구조 프로필은 2024Q1~2025Q4 최근 8개 분기, 업종 과거 성과는 2021Q1~2025Q4 전체 20개 분기를 사용한다.
 
-## 정적 검사
+## 품질 검사와 의존성 잠금
 
 ```bash
-.venv/bin/python -m compileall src scripts
+.venv/bin/ruff check backend src scripts tests
+.venv/bin/mypy
+.venv/bin/pip-audit --requirement requirements.lock
 .venv/bin/python -m pytest -q
+
+cd frontend
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+Python 직접 의존성의 허용 범위는 `requirements.txt`, 개발 도구는 `requirements-dev.txt`에 둔다. 로컬과 CI는 Python 3.13에서 해석한 정확한 전이 버전이 기록된 `requirements.lock`을 설치한다. 의존성을 의도적으로 갱신할 때만 아래 명령으로 잠금 파일을 다시 만든다.
+
+```bash
+.venv/bin/pip-compile --upgrade --strip-extras \
+  --output-file=requirements.lock requirements-dev.txt
+```
+
+mypy는 `src`와 `backend/app` 전체를 검사한다. GitHub Actions는 push와 pull request마다 Python lint/type/test 및 PostgreSQL 마이그레이션·통합 테스트, 프런트 lint/type/test/build를 같은 명령으로 실행한다.
+
+노트북 실행 검증이 필요하면 별도로 실행한다.
+
+```bash
 .venv/bin/jupyter nbconvert --to notebook --execute notebooks/00_data_inventory.ipynb \
   --output 00_data_inventory.executed.ipynb
 ```

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -11,18 +11,16 @@ from fastapi.middleware.gzip import GZipMiddleware
 from backend.app.api.v1 import agent, costs, finance, health, market, metadata, recommendations, research, stores
 from backend.app.core.config import settings
 from backend.app.core.errors import (
-    request_validation_error_handler,
-    runtime_error_handler,
-    value_error_handler,
     agent_state_error_handler,
     agent_timeout_error_handler,
     agent_unavailable_error_handler,
+    request_validation_error_handler,
+    runtime_error_handler,
     store_data_unavailable_error_handler,
     store_upstream_error_handler,
+    value_error_handler,
 )
 from backend.app.core.middleware import RecommendationRateLimitMiddleware, RequestContextMiddleware
-from backend.app.services.recommender_service import RecommenderService
-from backend.app.services.cost_provider import ParquetCommercialCostProvider, UnavailableCostProvider
 from backend.app.services.agent_service import (
     AgentStateError,
     AgentTimeoutError,
@@ -30,6 +28,13 @@ from backend.app.services.agent_service import (
     LocationAgentService,
     OpenAIAgentRunner,
 )
+from backend.app.services.cost_provider import (
+    CommercialCostProvider,
+    ParquetCommercialCostProvider,
+    UnavailableCostProvider,
+)
+from backend.app.services.finance_service import FinancePlanService
+from backend.app.services.recommender_service import RecommenderService
 from backend.app.services.store_service import (
     CommercialStoreService,
     SbizStoreProvider,
@@ -37,13 +42,11 @@ from backend.app.services.store_service import (
     StoreUpstreamError,
 )
 from backend.app.services.web_research_service import OpenAIWebResearchRunner, WebResearchService
-from backend.app.services.finance_service import FinancePlanService
 from backend.app.services.workspace_agent_service import (
     DatabaseFinancialCatalogProvider,
     OpenAIWorkspaceAgentRunner,
     WorkspaceAgentService,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +54,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        cost_provider: CommercialCostProvider
         try:
             cost_provider = ParquetCommercialCostProvider.from_artifact_dir(settings.artifact_dir)
         except (FileNotFoundError, RuntimeError) as exc:
@@ -121,6 +125,7 @@ def create_app() -> FastAPI:
         RecommendationRateLimitMiddleware,
         limit=settings.rate_limit_per_minute,
         agent_limit=settings.agent_rate_limit_per_minute,
+        store_limit=settings.store_rate_limit_per_minute,
     )
     app.add_middleware(RequestContextMiddleware, max_request_bytes=settings.max_request_bytes)
     app.add_exception_handler(ValueError, value_error_handler)

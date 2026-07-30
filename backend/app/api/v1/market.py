@@ -7,7 +7,6 @@ from backend.app.schemas.recommendation import (
 )
 from backend.app.services.recommender_service import RecommenderService
 
-
 router = APIRouter(tags=["market"])
 
 

@@ -5,7 +5,6 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
-
 LookupGroup = Literal["area", "industry", "district", "admin_dong"]
 LookupMetric = Literal[
     "sales", "closing_rate", "opening_rate", "growth_rate",

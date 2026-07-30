@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 import re
+from pathlib import Path
+
 import pandas as pd
 import yaml
-from pathlib import Path
+
 
 def normalize_column_name(name: str) -> str:
     """Normalize whitespace in a source column name."""

@@ -4,6 +4,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from backend.app.schemas.finance import StartupAdditionalCosts
 from backend.app.schemas.recommendation import (
     FitReason,
     PerformanceGroupContribution,
@@ -12,7 +13,6 @@ from backend.app.schemas.recommendation import (
     RecommendationRequestSchema,
     RentalEstimateSchema,
 )
-from backend.app.schemas.finance import StartupAdditionalCosts
 from backend.app.services.cost_provider import FloorType
 
 

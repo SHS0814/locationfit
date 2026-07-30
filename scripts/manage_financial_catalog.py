@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import sys
-
+from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 if str(REPOSITORY_ROOT) not in sys.path:
@@ -15,7 +14,6 @@ from backend.app.db.session import session_scope
 from backend.app.financial_catalog.persistence import bundle_from_database
 from backend.app.financial_catalog.validation import validate_catalog
 from backend.app.financial_catalog.workflow import apply_preview, preview_catalog
-
 
 DEFAULT_CURATED_ROOT = PROJECT_ROOT / "config/financial_catalog"
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "outputs/financial_catalog"

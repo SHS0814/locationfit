@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 import json
 import os
+from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict
@@ -24,7 +24,6 @@ from backend.app.services.agent_service import AgentTimeoutError, AgentUnavailab
 from backend.app.services.finance_service import FinancePlanService
 from backend.app.services.store_service import CommercialStoreService
 from backend.app.services.web_research_service import WebResearchService
-
 
 WORKSPACE_INSTRUCTIONS = {
     "stores": """

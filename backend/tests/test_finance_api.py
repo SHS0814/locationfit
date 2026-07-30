@@ -6,7 +6,6 @@ from backend.app.api.dependencies import get_financial_catalog
 from backend.app.financial_catalog.loader import load_curated_catalog
 from backend.app.main import app
 
-
 CATALOG_ROOT = Path(__file__).resolve().parents[2] / "config/financial_catalog"
 CATALOG = load_curated_catalog(CATALOG_ROOT)
 

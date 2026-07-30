@@ -10,7 +10,6 @@ from backend.app.financial_catalog.contracts import (
     ValidationReport,
 )
 
-
 KNOWN_RULE_FIELDS = {
     "region_code",
     "business_status",

@@ -12,11 +12,10 @@ from backend.app.services.recommender_service import RecommenderService
 from backend.app.services.store_classification import COMPETITOR_TERMS, classify_store
 from backend.app.services.store_service import (
     CommercialStoreService,
+    SbizStoreProvider,
     StoreFetchResult,
     StoreUpstreamError,
-    SbizStoreProvider,
 )
-
 
 ARTIFACT_DIR = Path(__file__).resolve().parents[1] / "artifacts/current"
 

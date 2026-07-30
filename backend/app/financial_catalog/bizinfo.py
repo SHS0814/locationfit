@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
 import hashlib
 import html
 import json
 import re
 import time
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -28,7 +28,6 @@ from backend.app.financial_catalog.contracts import (
     ProductRecord,
     ProductSourceRecord,
 )
-
 
 BIZINFO_API_URL = "https://www.bizinfo.go.kr/uss/rss/bizinfoApi.do"
 TARGET_KEYWORDS = ("소상공인", "개인사업자", "예비창업", "창업기업")
@@ -109,7 +108,7 @@ class BizinfoClient:
                 raw_total = channel.get("totCnt") if isinstance(channel, dict) else None
                 if raw_total is None and items:
                     raw_total = items[0].get("totCnt")
-                total = int(raw_total) if raw_total not in (None, "") else len(output)
+                total = int(str(raw_total)) if raw_total not in (None, "") else len(output)
                 if not items or len(items) < self.page_size:
                     break
                 page += 1

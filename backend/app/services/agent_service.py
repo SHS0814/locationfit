@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 import json
 import logging
 import os
+from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 from backend.app.schemas.agent import (
@@ -16,7 +16,6 @@ from backend.app.schemas.agent import (
 )
 from backend.app.services.cost_provider import CommercialCostProvider, UnavailableCostProvider
 from backend.app.services.recommender_service import RecommenderService
-
 
 logger = logging.getLogger("kb_recommender.agent")
 
@@ -182,12 +181,13 @@ class OpenAIAgentRunner:
 
         active_items: list[dict[str, Any]] = []
         active_report: dict[str, Any] | None = None
-        if payload.active_recommendation_request is not None:
+        active_request = payload.active_recommendation_request
+        if active_request is not None:
             active_items, active_diagnostics, active_report = recommender.recommend_with_report(
-                payload.active_recommendation_request
+                active_request
             )
             evidence_context = recommender.recommendation_evidence_context(
-                payload.active_recommendation_request,
+                active_request,
                 active_diagnostics,
             )
             allowed_codes = {item["area_code"] for item in active_items}
@@ -202,7 +202,7 @@ class OpenAIAgentRunner:
                 nonlocal comparison
                 comparison = recommender.compare(
                     area_codes,
-                    payload.active_recommendation_request.industry_code,
+                    active_request.industry_code,
                     allowed_area_codes=allowed_codes,
                 )
                 selected_codes = set(area_codes)
@@ -520,7 +520,7 @@ class LocationAgentService:
         )
 
     def _response(self, **changes: Any) -> dict[str, Any]:
-        cost = self.cost_provider.get_area_costs([])
+        cost_unavailable_reason = self.cost_provider.unavailable_reason
         result: dict[str, Any] = {
             "artifact_version": self.recommender.artifact_version,
             "assistant_message": "",
@@ -534,7 +534,7 @@ class LocationAgentService:
             "scenarios": [],
             "tradeoffs": [],
             "relaxation_options": [],
-            "data_gaps": ([{"code": "commercial_cost", "message": cost.reason}] if cost.availability == "unavailable" and cost.reason else []),
+            "data_gaps": ([{"code": "commercial_cost", "message": cost_unavailable_reason}] if cost_unavailable_reason else []),
             "selected_scenario_id": None,
             "analysis_revision": 0,
             "recommendations": [],

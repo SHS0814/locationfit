@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from collections import defaultdict, deque
 import logging
+import math
+import re
+from collections import defaultdict, deque
 from time import monotonic, perf_counter
 from uuid import uuid4
 
@@ -12,8 +14,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.app.core.errors import error_response
 
-
 logger = logging.getLogger("kb_recommender.request")
+STORE_LOOKUP_PATH = re.compile(r"/areas/[^/]+/stores/?$")
 
 
 class RequestContextMiddleware:
@@ -100,20 +102,31 @@ class RequestContextMiddleware:
 
 
 class RecommendationRateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, *, limit: int, agent_limit: int, window_seconds: int = 60) -> None:
+    def __init__(
+        self,
+        app,
+        *,
+        limit: int,
+        agent_limit: int,
+        store_limit: int = 5,
+        window_seconds: int = 60,
+    ) -> None:
         super().__init__(app)
         self.limit = limit
         self.agent_limit = agent_limit
+        self.store_limit = store_limit
         self.window_seconds = window_seconds
         self.requests: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 
     async def dispatch(self, request: Request, call_next):
-        if request.method != "POST":
-            return await call_next(request)
-        if request.url.path.endswith("/recommendations"):
+        if request.method == "POST" and request.url.path.endswith("/recommendations"):
             bucket, limit, code = "recommendations", self.limit, "RATE_LIMIT_EXCEEDED"
-        elif request.url.path.endswith(("/agent/turns", "/agent/workspace-turns", "/agent/web-research")):
+        elif request.method == "POST" and request.url.path.endswith(
+            ("/agent/turns", "/agent/workspace-turns", "/agent/web-research")
+        ):
             bucket, limit, code = "agent", self.agent_limit, "AGENT_RATE_LIMIT_EXCEEDED"
+        elif request.method == "GET" and STORE_LOOKUP_PATH.search(request.url.path):
+            bucket, limit, code = "stores", self.store_limit, "STORE_RATE_LIMIT_EXCEEDED"
         else:
             return await call_next(request)
         client = request.client.host if request.client else "unknown"
@@ -122,11 +135,14 @@ class RecommendationRateLimitMiddleware(BaseHTTPMiddleware):
         while history and history[0] <= now - self.window_seconds:
             history.popleft()
         if len(history) >= limit:
-            return error_response(
+            response = error_response(
                 429,
                 code,
                 "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
                 getattr(request.state, "request_id", None),
             )
+            retry_after = max(1, math.ceil(history[0] + self.window_seconds - now))
+            response.headers["Retry-After"] = str(retry_after)
+            return response
         history.append(now)
         return await call_next(request)

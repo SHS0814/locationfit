@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import hashlib
 import json
-from pathlib import Path
 import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal
 
 from sqlalchemy.orm import Session
@@ -19,7 +19,6 @@ from backend.app.financial_catalog.persistence import (
     lock_catalog,
 )
 from backend.app.financial_catalog.validation import validate_catalog
-
 
 SourceSelection = Literal["curated", "bizinfo", "all"]
 

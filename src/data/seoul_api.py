@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import json
 import os
-from pathlib import Path
 import time
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Sequence
 from urllib.parse import quote
-import xml.etree.ElementTree as ET
 
-from dotenv import load_dotenv
 import requests
+from dotenv import load_dotenv
 
 from src.utils.paths import PROJECT_ROOT
 
@@ -77,7 +77,8 @@ class SeoulAPIClient:
     ) -> None:
         self.env_path = (env_path or PROJECT_ROOT / ".env").resolve()
         load_dotenv(self.env_path, override=False)
-        self.api_key = (api_key or os.getenv("SEOUL_API_KEY", "")).strip()
+        raw_api_key = api_key if api_key is not None else os.getenv("SEOUL_API_KEY")
+        self.api_key = (raw_api_key or "").strip()
         if not self.api_key:
             raise SeoulAPIError(
                 f"프로젝트 루트의 .env에서 SEOUL_API_KEY를 찾지 못했습니다: {self.env_path}"
