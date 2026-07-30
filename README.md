@@ -2,7 +2,7 @@
 
 > AI 구성부터 파악하려면 [AI 에이전트 중심 프로젝트 아키텍처](docs/ai-agent-architecture.md)를 읽어주세요. 핵심 에이전트 3개, OpenAI Agents SDK, function tool과 결정론적 서비스의 연결을 현재 코드 기준으로 정리했습니다.
 
-선택 업종의 과거 성과가 우수했던 상권을 참조 집단으로 정의하고, 구조적으로 유사한 후보를 가중 KNN으로 탐색한 뒤 신뢰도 보정 과거 성과를 결합한다.
+사용자가 지정한 조건과 상권 구조의 적합도를 가중 거리로 계산하고, 선택 업종의 신뢰도 보정 과거 성과를 결합해 후보 상권을 추천한다.
 
 예비 창업자는 자연어로 업종·지역·고객·운영 맥락을 설명할 수 있다. 상담 에이전트는 필요한 질문만 최대 4회 진행한 뒤 현재 데이터에서 시장 범위와 제약 충돌을 탐색하고, 조건 충실형·성장 기회형·안정성 우선형 가설을 비교한다. 사용자가 전략과 조건을 명시적으로 확인하면 결정론적 추천 엔진을 실행하고, 상위 3개 상권을 동일 조건 전체 후보 중앙값과 비교한 수치 보고서를 제공한다. 경쟁은 내부 점수가 아니라 최신 동종업종 점포 수와 1㎢당 점포 밀도로 설명한다. AI는 점수와 매출을 생성하거나 재계산하지 않는다.
 
@@ -183,7 +183,7 @@ PYTHONPATH=. .venv/bin/python scripts/refresh_seoul_commercial_rent.py
 
 - 업종 과거 성과: 2021Q1~2025Q4(20개 분기)
 - 현재 상권 구조 프로필: 2024Q1~2025Q4(8개 분기)
-- 시간 감쇠 설정: `0.94 ** quarter_age`(모델 노트북에서 적용)
+- 최근성 신뢰도: `0.7 ** quarter_age`(`03_build_area_industry_evidence.ipynb`에서 적용, 4분기 이상 미관측 조합 제외)
 - 향후 외부 검증: 2026Q1(필수 데이터 전체 확보 전까지 비활성)
 
 기간은 [config/datasets.yaml](config/datasets.yaml)에서 변경한다. 2024년 전후 공간 단위 호환성은 병합 전 `check_historical_compatibility.py`로 반드시 검토한다.
@@ -229,22 +229,48 @@ cp .env.example .env
 ```bash
 .venv/bin/python scripts/check_raw_data.py
 .venv/bin/python scripts/check_historical_compatibility.py
-.venv/bin/jupyter nbconvert --to notebook --execute \
-  notebooks/01_ingest_clean.ipynb \
-  --output 01_ingest_clean.executed.ipynb
 ```
 
 검증 결과는 `outputs/tables/`의 인벤토리·스키마·중복·분기 커버리지·코드 교집합·연도별 분포 보고서로 저장된다. 필수 데이터가 없으면 `check_raw_data.py`는 보고서를 남긴 후 종료 코드 1을 반환한다.
 
-노트북 실행 순서:
+공식 노트북 파이프라인은 다음 순서다.
 
 1. `notebooks/00_data_inventory.ipynb`
 2. `notebooks/01_ingest_clean.ipynb`
 3. `notebooks/02_build_area_profile.ipynb`
-4. `notebooks/03_build_industry_performance.ipynb`
-5. `notebooks/04_success_reference_knn.ipynb`
-6. `notebooks/05_time_validation.ipynb`
-7. `notebooks/06_export_recommendations.ipynb`
+4. `notebooks/03_build_area_industry_evidence.ipynb`
+5. `notebooks/04_build_recommender.ipynb`
+
+저장소 루트에서 아래 명령을 실행하면 다섯 노트북을 순차 실행하고 각 결과를 `notebooks/*.executed.ipynb`로 저장한다. 앞 단계가 실패하면 셸이 즉시 종료되므로 불완전한 산출물을 다음 단계가 소비하지 않는다.
+
+```bash
+set -e
+notebooks=(
+  notebooks/00_data_inventory.ipynb
+  notebooks/01_ingest_clean.ipynb
+  notebooks/02_build_area_profile.ipynb
+  notebooks/03_build_area_industry_evidence.ipynb
+  notebooks/04_build_recommender.ipynb
+)
+
+for notebook in "${notebooks[@]}"; do
+  output="$(basename "${notebook%.ipynb}").executed.ipynb"
+  .venv/bin/jupyter nbconvert --to notebook --execute "$notebook" --output "$output"
+done
+```
+
+`02_build_area_profile.ipynb`는 최근 8개 분기의 상권 구조 프로필을, `03_build_area_industry_evidence.ipynb`는 20개 분기의 상권×업종 관측 성과와 신뢰도를 생성한다. `04_build_recommender.ipynb`는 추천 인덱스를 만들고 예시 시나리오의 결정성·점수 범위·가중치 민감도·k 안정성을 검증한 뒤 서비스 입력 및 검증 CSV를 내보낸다. 2026Q1 데이터가 모두 확보되기 전에는 별도의 시간 외부 검증 단계를 실행하지 않는다.
+
+주요 최종 산출물은 다음과 같다.
+
+- `data/processed/area_profile.parquet`
+- `data/processed/area_industry_evidence.parquet`
+- `data/processed/area_recommendation_index.parquet`
+- `outputs/tables/area_industry_evidence_validation.csv`
+- `outputs/tables/recommender_validation.csv`
+- `outputs/tables/recommender_sample_results.csv`
+- `outputs/tables/recommender_weight_sensitivity.csv`
+- `outputs/tables/recommender_k_stability.csv`
 
 `01_ingest_clean.ipynb`는 원본 한글/API 키를 아래 문자열 컬럼으로 표준화하고 `data/interim/<dataset>.parquet`를 생성한다.
 
