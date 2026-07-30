@@ -690,9 +690,14 @@ class AreaRecommender:
             * eligible_candidates["reliability_adjusted_evidence_score"]
         ).clip(0, 100)
         eligible_candidates["data_reliability"] = eligible_candidates["data_reliability_evidence"]
-        candidates = eligible_candidates.sort_values(
-            ["condition_fit_score", "area_code"], ascending=[False, True]
-        ).head(k).copy()
+        if preferences:
+            candidates = eligible_candidates.sort_values(
+                ["condition_fit_score", "area_code"], ascending=[False, True]
+            ).head(k).copy()
+        else:
+            # Without structural preferences every condition score is identical,
+            # so a k cutoff would select candidates arbitrarily by area code.
+            candidates = eligible_candidates.copy()
         candidates = candidates.sort_values(["final_score", "condition_fit_score", "area_code"], ascending=[False, False, True]).reset_index(drop=True)
         candidates["rank"] = np.arange(1, len(candidates) + 1)
         contribution_lookup: dict[str, dict[str, float]] = {}
@@ -733,6 +738,8 @@ class AreaRecommender:
             "stale_excluded": stale_count,
             "c_grade_candidates": int(candidates["reliability_grade"].eq("C").sum()),
             "selected_k": k,
+            "candidate_pool_limited_by_k": bool(preferences),
+            "candidate_pool_size": len(candidates),
             "returned": len(recommendations),
             "distance_metric": distance_metric,
             "condition_feature_count": len(preferences),

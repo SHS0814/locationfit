@@ -166,10 +166,22 @@ class AreaRecommenderTests(unittest.TestCase):
             RecommendationRequest(industry_code="i1", top_n=3),
             k=10,
         )
+        expected = result.eligible_candidates.sort_values(
+            ["final_score", "condition_fit_score", "area_code"],
+            ascending=[False, False, True],
+        ).head(3)
 
         self.assertEqual(result.preference_features, ())
         self.assertTrue(result.recommendations["condition_fit_score"].eq(100).all())
         self.assertEqual(result.diagnostics["condition_feature_count"], 0)
+        self.assertGreater(len(result.eligible_candidates), 10)
+        self.assertEqual(len(result.candidates), len(result.eligible_candidates))
+        self.assertFalse(result.diagnostics["candidate_pool_limited_by_k"])
+        self.assertEqual(result.diagnostics["candidate_pool_size"], len(result.eligible_candidates))
+        self.assertEqual(
+            result.recommendations["area_code"].tolist(),
+            expected["area_code"].tolist(),
+        )
 
     def test_condition_mapping_uses_explicit_features_only(self) -> None:
         request = RecommendationRequest(
@@ -261,8 +273,11 @@ class AreaRecommenderTests(unittest.TestCase):
             resident_population_importance=0.5,
             top_n=5,
         )
-        first = engine.recommend(request, k=10).recommendations
+        first_result = engine.recommend(request, k=10)
+        first = first_result.recommendations
         second = engine.recommend(request, k=10).recommendations
+        self.assertEqual(len(first_result.candidates), 10)
+        self.assertTrue(first_result.diagnostics["candidate_pool_limited_by_k"])
         self.assertEqual(first["area_code"].tolist(), second["area_code"].tolist())
         self.assertTrue(np.allclose(first["final_score"], second["final_score"]))
 
