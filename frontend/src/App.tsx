@@ -55,11 +55,15 @@ const recommendationPageLabels: Record<RecommendationPage, string> = {
 
 export default function App() {
   const [accessState, setAccessState] = useState<'checking' | 'granted' | 'required' | 'error'>('checking')
+  const [accessRequired, setAccessRequired] = useState(true)
   const [accessError, setAccessError] = useState<string | null>(null)
 
   useEffect(() => {
     api.aiSessionStatus()
-      .then((status) => setAccessState(status.authenticated ? 'granted' : 'required'))
+      .then((status) => {
+        setAccessRequired(status.required)
+        setAccessState(status.authenticated ? 'granted' : 'required')
+      })
       .catch((reason: Error) => {
         setAccessError(reason.message)
         setAccessState('error')
@@ -81,14 +85,20 @@ export default function App() {
   if (accessState === 'required') {
     return <AiAccessGate onAuthenticated={() => setAccessState('granted')} />
   }
-  return <ProtectedApp onSessionEnded={() => setAccessState('required')} />
+  return (
+    <ProtectedApp
+      showSessionExit={accessRequired}
+      onSessionEnded={() => setAccessState('required')}
+    />
+  )
 }
 
 interface ProtectedAppProps {
+  showSessionExit: boolean
   onSessionEnded: () => void
 }
 
-function ProtectedApp({ onSessionEnded }: ProtectedAppProps) {
+function ProtectedApp({ showSessionExit, onSessionEnded }: ProtectedAppProps) {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)
@@ -1136,9 +1146,11 @@ function ProtectedApp({ onSessionEnded }: ProtectedAppProps) {
       {leaseEditorArea && <LeaseCandidateEditor area={leaseEditorArea} existing={editingLeaseCandidate} onClose={closeLeaseEditor} onSave={saveLeaseCandidate} />}
       <footer className="app-footer">
         <p>로케이션핏 · 서울 열린데이터광장·소상공인시장진흥공단 기반 분석 · 미래 매출을 보장하지 않습니다.</p>
-        <button className="demo-session-exit" type="button" onClick={() => void endDemoSession()}>
-          접속 종료
-        </button>
+        {showSessionExit && (
+          <button className="demo-session-exit" type="button" onClick={() => void endDemoSession()}>
+            접속 종료
+          </button>
+        )}
       </footer>
     </div>
   )

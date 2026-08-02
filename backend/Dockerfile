@@ -12,6 +12,8 @@ RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin app
 COPY --chown=10001:10001 src ./src
 COPY --chown=10001:10001 backend ./backend
+COPY --chown=10001:10001 config ./config
+COPY --chown=10001:10001 scripts ./scripts
 
 USER 10001:10001
 EXPOSE 8000

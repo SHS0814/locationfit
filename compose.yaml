@@ -1,27 +1,51 @@
+x-backend-environment: &backend-environment
+  APP_ENV: development
+  ARTIFACT_DIR: /app/backend/artifacts/current
+  CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+  DATABASE_URL: postgresql+psycopg://kb:change-me-before-first-run@db:5432/kb
+  AI_SECURITY_ENABLED: "false"
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.4-mini}
+  DATA_GO_KR_SERVICE_KEY: ${DATA_GO_KR_SERVICE_KEY:-}
+  BIZINFO_API_KEY: ${BIZINFO_API_KEY:-}
+
 services:
   db:
     image: postgres:17-alpine
-    env_file:
-      - ${DB_ENV_FILE:-.env.postgres}
+    environment:
+      POSTGRES_DB: kb
+      POSTGRES_USER: kb
+      POSTGRES_PASSWORD: change-me-before-first-run
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  bootstrap:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment: *backend-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - python
+      - scripts/bootstrap_demo.py
 
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    env_file:
-      - ${APP_ENV_FILE:-.env.docker}
+    environment: *backend-environment
     depends_on:
-      db:
-        condition: service_healthy
+      bootstrap:
+        condition: service_completed_successfully
     command:
       - uvicorn
       - backend.app.main:app
@@ -35,7 +59,16 @@ services:
       - --reload-dir
       - /app/src
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)
+      interval: 5s
+      timeout: 5s
+      retries: 20
     volumes:
       - ./backend:/app/backend
       - ./src:/app/src
@@ -46,18 +79,16 @@ services:
   frontend:
     image: node:22-alpine
     working_dir: /app/frontend
-    # Never pass the backend secret environment file to Node/npm. Vite loads
-    # frontend/.env itself, while these entries allow only explicitly supplied
-    # VITE_* host variables through to the frontend container.
+    # Never pass backend secrets to Node/npm. Only the public API URL is exposed
+    # to Vite; map settings use the safe defaults in the frontend source.
     environment:
-      - VITE_API_BASE_URL
-      - VITE_MAP_TILE_URL
-      - VITE_MAP_ATTRIBUTION
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     volumes:
       - ./frontend:/app/frontend
       - frontend_node_modules:/app/frontend/node_modules

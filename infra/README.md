@@ -11,21 +11,19 @@
 처음 실행:
 
 ```bash
-cp .env.docker.example .env.docker
-cp .env.postgres.example .env.postgres
-cp frontend/.env.example frontend/.env
-# 최초 실행 전에 .env.postgres의 비밀번호와 .env.docker DATABASE_URL의 비밀번호를
-# 같은 충분히 긴 임의 값으로 변경
 docker compose up --build
-docker compose run --rm backend alembic -c backend/alembic.ini upgrade head
 ```
+
+로컬 Compose에는 비공개 네트워크에서만 쓰는 DB 기본값과 `AI_SECURITY_ENABLED=false`가
+명시되어 있다. `bootstrap` 서비스가 DB 상태 확인 후 마이그레이션과 최초 금융지원 카탈로그
+적재를 수행하고, 성공해야 백엔드와 프런트엔드가 순서대로 시작된다. 별도 환경파일은 필요 없다.
 
 기본 접속 주소:
 
 - 웹: `http://localhost:5173`
 - API 상태: `http://localhost:8000/api/v1/health/live`
 - API 문서: `http://localhost:8000/docs`
-- PostgreSQL: `localhost:5432` (`.env.postgres` 사용, 호스트 루프백에서만 접근 가능)
+- PostgreSQL: `localhost:5432` (호스트 루프백에서만 접근 가능)
 
 자주 쓰는 명령:
 
@@ -37,15 +35,16 @@ docker compose logs -f backend
 docker compose logs -f frontend
 ```
 
-AI 상담, 웹 검색, 상권 내 점포 조회까지 확인하려면 `.env.docker`에 아래 값을 채운다.
-비워 두어도 기본 추천 API와 화면 개발은 가능하다.
+AI 상담과 웹 검색까지 확인하려면 호스트 환경에 `OPENAI_API_KEY`만 설정한다. 비워 두어도
+`http://localhost:5173/?demo=hongdae-cafe`에서 결정론적 추천 데모를 확인할 수 있다.
 
-```bash
-OPENAI_API_KEY=<OpenAI API 키>
-DATA_GO_KR_SERVICE_KEY=<공공데이터포털 인증키>
-AI_ACCESS_CODE=<20자 이상의 임의 접근 코드>
-AI_SESSION_SECRET=<32자 이상의 별도 임의 서명키>
+```powershell
+$env:OPENAI_API_KEY="<OpenAI API 키>"
+docker compose up --build
 ```
+
+실시간 상권 내 점포 조회는 별도 외부 연동이므로 필요할 때만 호스트 환경에
+`DATA_GO_KR_SERVICE_KEY`를 추가한다.
 
 인터넷 공개 환경에서는 `APP_ENV=production`과 HTTPS를 사용한다. 심사위원이 접근 코드를
 한 번 입력하면 백엔드가 서명된 HttpOnly 세션 쿠키를 발급하며, 세션 만료 전까지 전체 데모를
@@ -59,8 +58,9 @@ AI_SESSION_SECRET=<32자 이상의 별도 임의 서명키>
 알림·모델별 rate limit도 함께 설정한다. 프로젝트 예산이 차단형인지 알림형인지는 배포 계정의
 현재 설정을 확인한다.
 
-`.env.docker`는 백엔드 컨테이너에만 주입한다. 프런트엔드 설정은
-`frontend/.env`에 `VITE_*` 변수만 두며, API 키나 데이터베이스 접속정보를 넣지 않는다.
+Compose는 `OPENAI_API_KEY`와 `DATA_GO_KR_SERVICE_KEY`를 백엔드 컨테이너에만 주입한다.
+프런트엔드에는 공개 가능한 `VITE_API_BASE_URL`만 전달하며 API 키나 데이터베이스 접속정보를
+넣지 않는다.
 
 `frontend` 서비스는 컨테이너 시작 시 `npm ci`를 실행하고, `node_modules`는 Docker named
 volume에 저장한다. 프런트 의존성이 꼬이면 아래처럼 볼륨까지 지운 뒤 다시 띄운다.

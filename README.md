@@ -6,6 +6,50 @@
 
 예비 창업자는 자연어로 업종·지역·고객·운영 맥락을 설명할 수 있다. 상담 에이전트는 필요한 질문만 최대 4회 진행한 뒤 현재 데이터에서 시장 범위와 제약 충돌을 탐색하고, 조건 충실형·성장 기회형·안정성 우선형 가설을 비교한다. 사용자가 전략과 조건을 명시적으로 확인하면 결정론적 추천 엔진을 실행하고, 상위 3개 상권을 동일 조건 전체 후보 중앙값과 비교한 수치 보고서를 제공한다. 경쟁은 내부 점수가 아니라 최신 동종업종 점포 수와 1㎢당 점포 밀도로 설명한다. AI는 점수와 매출을 생성하거나 재계산하지 않는다.
 
+## 심사위원용 1분 실행
+
+필수 준비물은 **Docker Desktop** 하나다. 저장소 루트에서 다음 명령 하나를 실행한다.
+
+```bash
+docker compose up --build
+```
+
+첫 실행에는 이미지와 의존성을 내려받아 몇 분이 걸릴 수 있다. PostgreSQL 시작, DB 마이그레이션,
+검수된 금융지원 상품 37개 적재, 백엔드 준비 확인 후 프런트엔드 시작까지 자동으로 진행된다.
+`bootstrap` 컨테이너가 종료 코드 0으로 끝나는 것은 정상이다.
+
+실행 확인 주소:
+
+- **바로 보는 완성 데모:** `http://localhost:5173/?demo=hongdae-cafe`
+- 웹 시작 화면: `http://localhost:5173`
+- API 준비 상태: `http://localhost:8000/api/v1/health/ready`
+- API 문서: `http://localhost:8000/docs`
+
+완성 데모는 OpenAI 키 없이도 홍대 커피 매장 조건으로 결정론적 추천·비교·자금계획 화면을
+구성한다. 자연어 AI 상담과 웹 리서치까지 확인할 때만 `OPENAI_API_KEY` 하나를 추가한다.
+
+PowerShell:
+
+```powershell
+$env:OPENAI_API_KEY="<OpenAI API 키>"
+docker compose up --build
+```
+
+macOS/Linux:
+
+```bash
+OPENAI_API_KEY="<OpenAI API 키>" docker compose up --build
+```
+
+AI 상담 예시 입력:
+
+> 마포구에서 20대 주말 수요를 겨냥한 커피·음료 매장을 열고 싶어요. 총예산은 1억 5천만원이고,
+> 월 환산 임대료 500만원 이하의 1층 66㎡ 매장을 찾고 있어요.
+
+종료는 실행 터미널에서 `Ctrl+C`를 누른 뒤 `docker compose down`을 실행한다. 이 Compose 구성은
+로컬 심사용이므로 접속 코드 입력을 생략한다. 인터넷 공개용 배포에서는 아래 운영 보안 설정을
+사용해야 한다.
+
 ## 웹서비스 구조
 
 웹서비스는 `frontend/`와 `backend/`를 명시적으로 분리한다.
@@ -14,24 +58,34 @@
 - `backend/`: FastAPI, 추천 엔진, 서비스용 Parquet 아티팩트와 API 테스트
 - `infra/`: 프런트 정적 호스팅과 백엔드 컨테이너의 배포 계약
 
-로컬 실행:
+### Docker 없이 직접 개발
+
+직접 개발 서버를 띄우는 경우에는 Python 3.12, Node.js 22와 PostgreSQL이 필요하다. 먼저
+`.env.example`을 `.env`로 복사하고 다음 순서로 실행한다.
 
 ```bash
 # 터미널 1: API
-source .venv/bin/activate
+python -m venv .venv
+# macOS/Linux: source .venv/bin/activate
+# Windows PowerShell: .\.venv\Scripts\Activate.ps1
 pip install --require-hashes -r requirements-dev.lock
+docker compose up -d db
+python scripts/bootstrap_demo.py
 uvicorn backend.app.main:app --reload
 
 # 터미널 2: 웹
 cd frontend
-cp .env.example .env
-npm install
+npm ci
 npm run dev
 ```
 
 기본 주소는 웹 `http://localhost:5173`, API 문서 `http://localhost:8000/docs`다.
 
-AI 상담과 선택 상권·업소 웹 리서치를 사용하려면 저장소 루트의 `.env.example`을 참고해 서버 실행 환경에 `OPENAI_API_KEY`, `AI_ACCESS_CODE`, `AI_SESSION_SECRET`을 설정한다. 기본 모델은 `gpt-5.4-mini`이며 `OPENAI_MODEL`로 변경할 수 있다. API 키가 없거나 OpenAI API가 일시적으로 실패하면 기존 추천 데이터와 API는 정상 동작하지만 AI 상담·웹 리서치는 재시도 오류를 반환한다.
+로컬 개발에서 AI 상담과 선택 상권·업소 웹 리서치를 사용하려면 `.env`에 `OPENAI_API_KEY`를
+설정한다. 기본 모델은 `gpt-5.4-mini`이며 `OPENAI_MODEL`로 변경할 수 있다. API 키가 없거나
+OpenAI API가 일시적으로 실패하면 기존 추천 데이터와 API는 정상 동작하지만 AI 상담·웹 리서치는
+재시도 오류를 반환한다. 인터넷 공개용 운영 데모에서는 별도로 `AI_ACCESS_CODE`와
+`AI_SESSION_SECRET`을 설정한다.
 
 운영 데모는 접근 코드로 발급한 서명형 HttpOnly 세션이 있어야 전체 추천·분석 API를 호출할 수
 있다. 상태 확인과 세션 발급 API만 인증 전에 열어 두며, 한 번 인증하면 세션 만료 전까지 화면을
@@ -91,23 +145,19 @@ STORE_RATE_LIMIT_PER_MINUTE=5
 `active`, `upcoming`, `unknown` 상품을 읽어 구조화된 자격조건을 결정론적으로
 비교하고, 프런트엔드는 상품 유형·혜택·확인사항·공식 출처를 카드로 표시한다.
 
-로컬 DB와 최초 스키마를 준비한다.
+심사용 Compose에서는 `bootstrap` 서비스가 마이그레이션과 초기 검수 카탈로그 적재를 자동으로
+수행한다.
 
 ```bash
-cp .env.docker.example .env.docker
-cp .env.postgres.example .env.postgres
-cp frontend/.env.example frontend/.env
-# 최초 실행 전에 .env.postgres의 비밀번호와 .env.docker DATABASE_URL의 비밀번호를
-# 같은 충분히 긴 임의 값으로 변경
-docker compose up -d db
-docker compose run --rm backend alembic -c backend/alembic.ini upgrade head
-docker compose run --rm backend alembic -c backend/alembic.ini current
+docker compose up --build
 ```
 
-호스트에서 직접 실행할 때는 `.env.example`의 `DATABASE_URL`을 사용한다.
+호스트에서 백엔드를 직접 실행할 때는 `.env.example`의 `DATABASE_URL`을 사용하고 부트스트랩
+스크립트를 한 번 실행한다. 기존 상품이 있으면 덮어쓰지 않는다.
 
 ```bash
-.venv/bin/alembic -c backend/alembic.ini upgrade head
+docker compose up -d db
+python scripts/bootstrap_demo.py
 ```
 
 - 추천 모델과 서울 상권 데이터는 기존 Parquet 아티팩트를 계속 사용한다.
