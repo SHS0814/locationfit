@@ -74,6 +74,7 @@ docker compose up --build
 - 빌드 위치: `frontend/`
 - 빌드 명령: `npm ci && npm run build`
 - 배포 디렉터리: `frontend/dist/`
+- 컨테이너 포트: `8080`(비루트 Nginx)
 - 필수 변수: `VITE_API_BASE_URL`
 - 지도 변수: `VITE_MAP_TILE_URL`, `VITE_MAP_ATTRIBUTION`
 

@@ -404,12 +404,12 @@ flowchart TB
     user["사용자 브라우저"]
 
     subgraph host["서비스 실행 환경"]
-        nginx["Nginx<br/>정적 파일·SPA 라우팅"]
+        nginx["Nginx :8080 · UID 101<br/>정적 파일·SPA 라우팅 · 보안 헤더"]
         frontend["React Build Assets"]
-        backend["FastAPI Container<br/>Uvicorn"]
+        backend["FastAPI Container · UID 10001<br/>Uvicorn"]
         memory["Process Memory<br/>추천 인덱스·성과·경계"]
         artifactVolume["Read-only Artifact Directory"]
-        database[("PostgreSQL")]
+        database[("PostgreSQL<br/>정책 카탈로그·AI 요청 원장")]
 
         nginx --> frontend
         backend <--> memory
@@ -446,8 +446,8 @@ sequenceDiagram
         H-->>O: /health/ready 200 + artifact_version
     else 검증 실패
         L-->>API: 오류
-        API->>API: startup_error 보존
-        H-->>O: /health/ready 503
+        API->>API: 내부 원인은 request ID와 함께 서버 로그에 기록
+        H-->>O: /health/ready 503 + 일반화된 오류
     end
 ```
 
@@ -472,7 +472,7 @@ flowchart LR
 
     subgraph dataBoundary["관리 데이터 경계"]
         artifact[("읽기 전용 Parquet")]
-        db[("정책자금 PostgreSQL")]
+        db[("정책자금·AI 요청 원장 PostgreSQL")]
     end
 
     subgraph outside["외부 제공자"]
@@ -495,6 +495,7 @@ flowchart LR
 | 점포 API 응답 | 백엔드 메모리 캐시 | 프로세스 수명 | 24시간 fresh, 최대 7일 stale fallback |
 | 웹 리서치 결과 | 브라우저 `sessionStorage` | 브라우저 탭 | 사용자가 눌렀을 때만 실행 |
 | 정책자금 카탈로그 | PostgreSQL | 영구 | preview·검증 후 반영 |
+| AI 요청 제한 원장 | PostgreSQL | 일일 집계·실행 lease | 전역 요청·비용·동시 실행 제한, 대화 원문 미저장 |
 | Agents SDK 응답 저장·추적 | 사용하지 않음 | 해당 없음 | `store=False`, tracing 비활성화 |
 
 ---

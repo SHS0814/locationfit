@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -11,6 +13,9 @@ from backend.app.services.agent_service import (
     AgentUnavailableError,
 )
 from backend.app.services.store_service import StoreDataUnavailableError, StoreUpstreamError
+
+logger = logging.getLogger("kb_recommender.errors")
+PUBLIC_RUNTIME_ERROR_MESSAGE = "서비스를 일시적으로 사용할 수 없습니다."
 
 
 def error_response(status_code: int, code: str, message: str, request_id: str | None) -> JSONResponse:
@@ -39,11 +44,20 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
 
 
 async def runtime_error_handler(request: Request, exc: RuntimeError) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    logger.error(
+        "Unhandled runtime error request_id=%s method=%s path=%s error_type=%s",
+        request_id,
+        request.method,
+        request.url.path,
+        type(exc).__name__,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
     return error_response(
         503,
         "RECOMMENDER_UNAVAILABLE",
-        str(exc),
-        getattr(request.state, "request_id", None),
+        PUBLIC_RUNTIME_ERROR_MESSAGE,
+        request_id,
     )
 
 

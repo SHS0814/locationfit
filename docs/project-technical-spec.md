@@ -413,7 +413,7 @@ FastAPI lifespan에서 `RecommenderService`가 아티팩트를 한 번 로드한
 6. 자치구 코드·이름 고유성과 정확히 25개 경계 존재
 7. 경계 JSON이 Polygon 또는 MultiPolygon 형식
 
-추천 엔진은 운영 중 데이터베이스를 조회하지 않고 메모리에 적재된 Parquet 데이터로 동작한다. 아티팩트 로딩이 실패하면 `/health/live`는 프로세스 생존을 표시할 수 있지만 `/health/ready`와 추천 요청은 준비 실패 원인을 포함한 오류를 반환한다.
+추천 엔진은 운영 중 데이터베이스를 조회하지 않고 메모리에 적재된 Parquet 데이터로 동작한다. 아티팩트 로딩이 실패하면 `/health/live`는 프로세스 생존을 표시할 수 있지만 `/health/ready`와 추천 요청은 일반화된 503 오류를 반환한다. 파일 경로·DB 오류 같은 내부 원인은 응답에 포함하지 않고 request ID와 함께 서버 로그에만 남긴다.
 
 ---
 
@@ -599,7 +599,7 @@ sequenceDiagram
 | 503 | `AGENT_UNAVAILABLE` | AI 설정 또는 제공자 장애 |
 | 504 | `AGENT_TIMEOUT` | AI 처리 제한 시간 초과 |
 
-기본 운영 제한은 추천 분당 30회, AI 분당 10회, 요청 본문 32KB다. 모든 응답에는 `X-Request-ID`, 정상 처리 응답에는 `X-Process-Time-Ms`가 포함된다. 1KB 이상 응답은 GZip 압축 대상이다. CORS는 설정된 프런트엔드 origin만 허용한다.
+기본 운영 제한은 추천 분당 30회, AI 분당 10회, 요청 본문 32KB다. 모든 응답에는 `X-Request-ID`, 정상 처리 응답에는 `X-Process-Time-Ms`가 포함된다. 1KB 이상 응답은 GZip 압축 대상이다. CORS는 설정된 프런트엔드 origin만 허용한다. 예상하지 못한 `RuntimeError`의 상세 메시지는 서버 로그에만 기록하고 클라이언트에는 일반화된 서비스 불가 메시지만 반환한다.
 
 ---
 
@@ -718,6 +718,8 @@ AI 호출은 `store=False`이고 Agents SDK tracing을 비활성화한다. 대�
 - 추천은 난수나 온라인 학습을 사용하지 않는다.
 - 점수 정책에 `strategy-v1`, 데이터에 `2025q4-v3` 버전을 표시한다.
 - API 응답에 아티팩트 버전과 실제 적용 가중치를 포함한다.
+- Docker와 CI는 Linux/Python 3.12에서 생성한 동일한 해시 고정 운영 잠금을 사용한다.
+- 백엔드는 UID 10001, 프런트 Nginx는 UID 101로 실행하며 프런트 응답에 CSP와 기본 보안 헤더를 적용한다.
 
 ### 9.2 해석 시 주의사항
 

@@ -19,7 +19,7 @@
 ```bash
 # 터미널 1: API
 source .venv/bin/activate
-pip install -r requirements.lock
+pip install --require-hashes -r requirements-dev.lock
 uvicorn backend.app.main:app --reload
 
 # 터미널 2: 웹
@@ -202,7 +202,7 @@ PYTHONPATH=. .venv/bin/python scripts/refresh_seoul_commercial_rent.py
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.lock
+pip install --require-hashes -r requirements-dev.lock
 cp .env.example .env
 # .env에 SEOUL_API_KEY 입력
 ```
@@ -319,7 +319,8 @@ raw 및 interim 모두 완전 중복과 설정 grain 키 중복이 0이며, 모�
 ```bash
 .venv/bin/ruff check backend src scripts tests
 .venv/bin/mypy
-.venv/bin/pip-audit --requirement requirements.lock
+.venv/bin/pip-audit --disable-pip --requirement backend/requirements.lock
+.venv/bin/pip-audit --disable-pip --requirement requirements-dev.lock
 .venv/bin/python -m pytest -q
 
 cd frontend
@@ -330,11 +331,13 @@ npm test
 npm run build
 ```
 
-Python 직접 의존성의 허용 범위는 `requirements.txt`, 개발 도구는 `requirements-dev.txt`에 둔다. 로컬과 CI는 Python 3.13에서 해석한 정확한 전이 버전이 기록된 `requirements.lock`을 설치한다. 의존성을 의도적으로 갱신할 때만 아래 명령으로 잠금 파일을 다시 만든다.
+백엔드 운영 의존성의 허용 범위는 `backend/requirements.txt`, 데이터 분석·로컬 실행 의존성은 `requirements.txt`, 개발 도구는 `requirements-dev.txt`에 둔다. Docker와 CI는 Linux/Python 3.12에서 해석하고 배포 파일 해시까지 기록한 `backend/requirements.lock`의 동일한 운영 버전을 사용한다. CI와 로컬 개발은 이 운영 잠금을 포함하는 `requirements-dev.lock`을 추가로 사용한다. 의존성을 의도적으로 갱신할 때만 Python 3.12 환경에서 아래 순서로 잠금 파일을 다시 만든다.
 
 ```bash
-.venv/bin/pip-compile --upgrade --strip-extras \
-  --output-file=requirements.lock requirements-dev.txt
+python -m piptools compile --upgrade --generate-hashes --strip-extras \
+  --output-file=backend/requirements.lock backend/requirements.txt
+python -m piptools compile --upgrade --generate-hashes --allow-unsafe --strip-extras \
+  --output-file=requirements-dev.lock requirements-dev.txt
 ```
 
 mypy는 `src`와 `backend/app` 전체를 검사한다. GitHub Actions는 push와 pull request마다 Python lint/type/test 및 PostgreSQL 마이그레이션·통합 테스트, 프런트 lint/type/test/build를 같은 명령으로 실행한다.
