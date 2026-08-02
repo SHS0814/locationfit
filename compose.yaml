@@ -1,9 +1,11 @@
 x-backend-environment: &backend-environment
-  APP_ENV: development
+  APP_ENV: ${APP_ENV:-development}
   ARTIFACT_DIR: /app/backend/artifacts/current
-  CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
   DATABASE_URL: postgresql+psycopg://kb:change-me-before-first-run@db:5432/kb
-  AI_SECURITY_ENABLED: "false"
+  AI_SECURITY_ENABLED: ${AI_SECURITY_ENABLED:-false}
+  AI_ACCESS_CODE: ${AI_ACCESS_CODE:-}
+  AI_SESSION_SECRET: ${AI_SESSION_SECRET:-}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.4-mini}
   DATA_GO_KR_SERVICE_KEY: ${DATA_GO_KR_SERVICE_KEY:-}
@@ -12,6 +14,7 @@ x-backend-environment: &backend-environment
 services:
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: kb
       POSTGRES_USER: kb
@@ -46,20 +49,9 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
-    command:
-      - uvicorn
-      - backend.app.main:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8000"
-      - --reload
-      - --reload-dir
-      - /app/backend/app
-      - --reload-dir
-      - /app/src
+    restart: unless-stopped
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${APP_BIND_HOST:-0.0.0.0}:${BACKEND_PORT:-8000}:8000"
     healthcheck:
       test:
         - CMD
@@ -77,22 +69,18 @@ services:
       - ./outputs:/app/outputs
 
   frontend:
-    image: node:22-alpine
-    working_dir: /app/frontend
-    # Never pass backend secrets to Node/npm. Only the public API URL is exposed
-    # to Vite; map settings use the safe defaults in the frontend source.
-    environment:
-      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      # Only this public URL is compiled into the browser bundle.
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
-    volumes:
-      - ./frontend:/app/frontend
-      - frontend_node_modules:/app/frontend/node_modules
+      - "${APP_BIND_HOST:-0.0.0.0}:${FRONTEND_PORT:-5173}:8080"
 
 volumes:
-  frontend_node_modules:
   postgres_data:
