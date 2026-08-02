@@ -4,8 +4,6 @@
 **/.env
 **/.env.*
 !.env.example
-!.env.docker.example
-!.env.postgres.example
 !**/.env.example
 .venv
 __pycache__/
