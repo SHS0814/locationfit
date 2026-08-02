@@ -2,7 +2,7 @@ x-backend-environment: &backend-environment
   APP_ENV: ${APP_ENV:-development}
   ARTIFACT_DIR: /app/backend/artifacts/current
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
-  DATABASE_URL: postgresql+psycopg://kb:change-me-before-first-run@db:5432/kb
+  DATABASE_URL: postgresql+psycopg://kb:${POSTGRES_PASSWORD:-change-me-before-first-run}@db:5432/kb
   AI_SECURITY_ENABLED: ${AI_SECURITY_ENABLED:-false}
   AI_ACCESS_CODE: ${AI_ACCESS_CODE:-}
   AI_SESSION_SECRET: ${AI_SESSION_SECRET:-}
@@ -18,7 +18,7 @@ services:
     environment:
       POSTGRES_DB: kb
       POSTGRES_USER: kb
-      POSTGRES_PASSWORD: change-me-before-first-run
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-before-first-run}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -74,7 +74,7 @@ services:
       dockerfile: frontend/Dockerfile
       # Only this public URL is compiled into the browser bundle.
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
     restart: unless-stopped
     depends_on:
       backend:
