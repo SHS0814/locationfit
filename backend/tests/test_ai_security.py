@@ -15,6 +15,7 @@ from backend.app.core.ai_security import (
 )
 from backend.app.core.config import Settings, settings
 from backend.app.core.errors import ai_protection_error_handler
+from backend.app.main import create_app
 
 
 def _secure_settings(**overrides: object) -> Settings:
@@ -81,6 +82,36 @@ def test_ai_session_cookie_is_secure_in_production() -> None:
 
     assert response.status_code == 200
     assert "Secure" in response.headers["set-cookie"]
+
+
+def test_application_api_requires_session_but_keeps_health_public() -> None:
+    protected_app = create_app()
+    protected_app.dependency_overrides[get_ai_security_settings] = lambda: _secure_settings()
+    try:
+        with TestClient(protected_app) as client:
+            health = client.get("/api/v1/health/live")
+            status = client.get("/api/v1/ai/session")
+            logout_preflight = client.options(
+                "/api/v1/ai/session",
+                headers={
+                    "Origin": "http://localhost:5173",
+                    "Access-Control-Request-Method": "DELETE",
+                },
+            )
+            rejected = client.get("/api/v1/metadata")
+            accepted = client.post("/api/v1/ai/session", json={"access_code": "a" * 24})
+            metadata = client.get("/api/v1/metadata")
+    finally:
+        protected_app.dependency_overrides.clear()
+
+    assert health.status_code == 200
+    assert status.status_code == 200
+    assert logout_preflight.status_code == 200
+    assert "DELETE" in logout_preflight.headers["access-control-allow-methods"]
+    assert rejected.status_code == 401
+    assert rejected.json()["error"]["code"] == "AI_AUTH_REQUIRED"
+    assert accepted.status_code == 200
+    assert metadata.status_code == 200
 
 
 def test_rotating_access_code_invalidates_existing_sessions() -> None:

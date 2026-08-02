@@ -76,15 +76,19 @@ export default function App() {
     return <main className="ai-access-shell"><p>보안 세션을 확인하고 있습니다…</p></main>
   }
   if (accessState === 'error') {
-    return <main className="ai-access-shell"><section className="ai-access-card"><h1>AI 보안 설정 오류</h1><p role="alert">{accessError}</p></section></main>
+    return <main className="ai-access-shell"><section className="ai-access-card"><h1>접근 보안 설정 오류</h1><p role="alert">{accessError}</p></section></main>
   }
   if (accessState === 'required') {
     return <AiAccessGate onAuthenticated={() => setAccessState('granted')} />
   }
-  return <ProtectedApp />
+  return <ProtectedApp onSessionEnded={() => setAccessState('required')} />
 }
 
-function ProtectedApp() {
+interface ProtectedAppProps {
+  onSessionEnded: () => void
+}
+
+function ProtectedApp({ onSessionEnded }: ProtectedAppProps) {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)
@@ -131,6 +135,15 @@ function ProtectedApp() {
     finance: new LatestRequestGuard(),
   })
   const recommendationItemsReady = session.items.length > 0 && session.items.every(hasAreaBoundary)
+
+  const endDemoSession = async () => {
+    try {
+      await api.deleteAiSession()
+      onSessionEnded()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '접속을 종료하지 못했습니다.')
+    }
+  }
 
   const activateWorkspaceRequestContext = (workspace: WorkspaceAgentScope, contextKey: string) => {
     if (!workspaceRequestGuards.current[workspace].activate(contextKey)) return
@@ -1121,7 +1134,12 @@ function ProtectedApp() {
         </section>
       </main>
       {leaseEditorArea && <LeaseCandidateEditor area={leaseEditorArea} existing={editingLeaseCandidate} onClose={closeLeaseEditor} onSave={saveLeaseCandidate} />}
-      <footer>로케이션핏 · 서울 열린데이터광장·소상공인시장진흥공단 기반 분석 · 미래 매출을 보장하지 않습니다.</footer>
+      <footer className="app-footer">
+        <p>로케이션핏 · 서울 열린데이터광장·소상공인시장진흥공단 기반 분석 · 미래 매출을 보장하지 않습니다.</p>
+        <button className="demo-session-exit" type="button" onClick={() => void endDemoSession()}>
+          접속 종료
+        </button>
+      </footer>
     </div>
   )
 }

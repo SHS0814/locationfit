@@ -30,6 +30,10 @@ services:
       - --port
       - "8000"
       - --reload
+      - --reload-dir
+      - /app/backend/app
+      - --reload-dir
+      - /app/src
     ports:
       - "8000:8000"
     volumes:

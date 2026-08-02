@@ -28,12 +28,9 @@ export function AiAccessGate({ onAuthenticated }: AiAccessGateProps) {
 
   return (
     <main className="ai-access-shell">
-      <section className="ai-access-card" aria-labelledby="ai-access-title">
-        <p className="eyebrow">보호된 대회 데모</p>
-        <h1 id="ai-access-title">로케이션핏 AI 접속</h1>
-        <p>AI 상담과 웹 리서치 비용을 보호하기 위해 운영자가 전달한 접근 코드가 필요합니다.</p>
+      <section className="ai-access-card" aria-label="데모 접속">
         <form onSubmit={submit}>
-          <label htmlFor="ai-access-code">접근 코드</label>
+          <label htmlFor="ai-access-code">비밀번호</label>
           <input
             id="ai-access-code"
             type="password"
@@ -48,7 +45,9 @@ export function AiAccessGate({ onAuthenticated }: AiAccessGateProps) {
             {loading ? '확인 중…' : '접속하기'}
           </button>
         </form>
-        <p className="ai-access-note">접근 코드는 브라우저 저장소에 보관되지 않습니다.</p>
+        <p className="ai-access-note">
+          비밀번호는 브라우저 저장소에 보관되지 않으며, 세션이 만료될 때까지 다시 입력하지 않아도 됩니다.
+        </p>
       </section>
     </main>
   )

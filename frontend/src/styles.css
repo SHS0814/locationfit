@@ -6,6 +6,19 @@ body { margin: 0; min-width: 320px; }
 button, select, input, textarea { font: inherit; }
 button { cursor: pointer; }
 .app-shell { min-height: 100vh; }
+.app-footer { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.app-footer p { margin: 0; }
+.demo-session-exit {
+  width: auto;
+  padding: 8px 12px;
+  border: 1px solid #c8c6bf;
+  border-radius: 999px;
+  background: #202823;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.demo-session-exit:hover { background: #344039; }
 .eyebrow { font: 700 11px/1 'DM Sans', sans-serif; letter-spacing: .18em; color: #d4aa00; }
 .workspace { display: grid; grid-template-columns: minmax(330px, 410px) minmax(0, 1fr); gap: 24px; max-width: 1500px; margin: 28px auto 0; padding: 0 28px 70px; position: relative; }
 .results-heading h2 { margin: 9px 0 5px; font-size: 22px; letter-spacing: -.03em; }

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -20,7 +20,7 @@ from backend.app.api.v1 import (
     security,
     stores,
 )
-from backend.app.core.ai_security import AIProtectionError
+from backend.app.core.ai_security import AIProtectionError, require_ai_session
 from backend.app.core.config import settings
 from backend.app.core.errors import (
     agent_state_error_handler,
@@ -130,7 +130,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
         allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-Request-ID"],
     )
     app.add_middleware(GZipMiddleware, minimum_size=1_024)
@@ -150,11 +150,23 @@ def create_app() -> FastAPI:
     app.add_exception_handler(StoreDataUnavailableError, store_data_unavailable_error_handler)
     app.add_exception_handler(StoreUpstreamError, store_upstream_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)
-    for router in (
-        health.router, metadata.router, recommendations.router, market.router, costs.router, stores.router,
-        agent.router, research.router, security.router, finance.router,
-    ):
+    for router in (health.router, security.router):
         app.include_router(router, prefix=settings.api_prefix)
+    for router in (
+        metadata.router,
+        recommendations.router,
+        market.router,
+        costs.router,
+        stores.router,
+        agent.router,
+        research.router,
+        finance.router,
+    ):
+        app.include_router(
+            router,
+            prefix=settings.api_prefix,
+            dependencies=[Depends(require_ai_session)],
+        )
     return app
 
 

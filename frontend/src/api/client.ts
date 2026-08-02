@@ -26,6 +26,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(message, response.status, body.error?.code)
   }
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -36,6 +37,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ access_code: accessCode }),
     }),
+  deleteAiSession: () => request<void>('/ai/session', { method: 'DELETE' }),
   metadata: () => request<MetadataResponse>('/metadata'),
   recommend: (payload: RecommendationRequest) =>
     request<RecommendationResponse>('/recommendations', {
