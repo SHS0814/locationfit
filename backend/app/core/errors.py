@@ -4,6 +4,7 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from backend.app.core.ai_security import AIProtectionError
 from backend.app.services.agent_service import (
     AgentStateError,
     AgentTimeoutError,
@@ -17,6 +18,18 @@ def error_response(status_code: int, code: str, message: str, request_id: str | 
         status_code=status_code,
         content={"error": {"code": code, "message": message, "request_id": request_id}},
     )
+
+
+async def ai_protection_error_handler(request: Request, exc: AIProtectionError) -> JSONResponse:
+    response = error_response(
+        exc.status_code,
+        exc.code,
+        exc.message,
+        getattr(request.state, "request_id", None),
+    )
+    if exc.retry_after is not None:
+        response.headers["Retry-After"] = str(exc.retry_after)
+    return response
 
 
 async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:

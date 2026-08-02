@@ -8,12 +8,25 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from backend.app.api.v1 import agent, costs, finance, health, market, metadata, recommendations, research, stores
+from backend.app.api.v1 import (
+    agent,
+    costs,
+    finance,
+    health,
+    market,
+    metadata,
+    recommendations,
+    research,
+    security,
+    stores,
+)
+from backend.app.core.ai_security import AIProtectionError
 from backend.app.core.config import settings
 from backend.app.core.errors import (
     agent_state_error_handler,
     agent_timeout_error_handler,
     agent_unavailable_error_handler,
+    ai_protection_error_handler,
     request_validation_error_handler,
     runtime_error_handler,
     store_data_unavailable_error_handler,
@@ -116,7 +129,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
-        allow_credentials=False,
+        allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Content-Type", "X-Request-ID"],
     )
@@ -129,6 +142,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestContextMiddleware, max_request_bytes=settings.max_request_bytes)
     app.add_exception_handler(ValueError, value_error_handler)
+    app.add_exception_handler(AIProtectionError, ai_protection_error_handler)
     app.add_exception_handler(RuntimeError, runtime_error_handler)
     app.add_exception_handler(AgentUnavailableError, agent_unavailable_error_handler)
     app.add_exception_handler(AgentTimeoutError, agent_timeout_error_handler)
@@ -138,7 +152,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)
     for router in (
         health.router, metadata.router, recommendations.router, market.router, costs.router, stores.router,
-        agent.router, research.router, finance.router,
+        agent.router, research.router, security.router, finance.router,
     ):
         app.include_router(router, prefix=settings.api_prefix)
     return app

@@ -602,3 +602,25 @@ footer { padding: 25px; text-align: center; color: #918f88; font-size: 11px; bor
   .lease-editor-body, .lease-editor > header, .lease-editor > footer { padding-left: 16px; padding-right: 16px; }
   .lease-editor-fields.two, .lease-editor-fields.money, .startup-grid { grid-template-columns: 1fr !important; }
 }
+.ai-access-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at top, #eef5ff 0, #f7f9fc 48%, #edf1f6 100%);
+}
+
+.ai-access-card {
+  width: min(440px, 100%);
+  padding: 32px;
+  border: 1px solid #d9e1ec;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgb(29 54 90 / 12%);
+}
+
+.ai-access-card h1 { margin: 8px 0 12px; }
+.ai-access-card form { display: grid; gap: 10px; margin-top: 24px; }
+.ai-access-card input { width: 100%; }
+.ai-access-error { color: #b42318; margin: 0; }
+.ai-access-note { margin: 16px 0 0; color: #5f6b7a; font-size: 0.875rem; }

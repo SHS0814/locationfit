@@ -13,7 +13,9 @@
 ```bash
 cp .env.docker.example .env.docker
 cp .env.postgres.example .env.postgres
-# 최초 실행 전에 두 파일의 PostgreSQL 비밀번호를 같은 임의 값으로 변경
+cp frontend/.env.example frontend/.env
+# 최초 실행 전에 .env.postgres의 비밀번호와 .env.docker DATABASE_URL의 비밀번호를
+# 같은 충분히 긴 임의 값으로 변경
 docker compose up --build
 docker compose run --rm backend alembic -c backend/alembic.ini upgrade head
 ```
@@ -41,7 +43,23 @@ AI 상담, 웹 검색, 상권 내 점포 조회까지 확인하려면 `.env.dock
 ```bash
 OPENAI_API_KEY=<OpenAI API 키>
 DATA_GO_KR_SERVICE_KEY=<공공데이터포털 인증키>
+AI_ACCESS_CODE=<20자 이상의 임의 접근 코드>
+AI_SESSION_SECRET=<32자 이상의 별도 임의 서명키>
 ```
+
+인터넷 공개 환경에서는 `APP_ENV=production`과 HTTPS를 사용한다. 사용자가 접근 코드를
+입력하면 백엔드가 서명된 HttpOnly 세션 쿠키를 발급하며, 접근 코드 자체는 프런트 번들이나
+브라우저 저장소에 보관하지 않는다. 세 AI 엔드포인트는 PostgreSQL 원장을 공유해 전체 분당
+요청 수, UTC 일일 요청 수·비용 예약액, 동시 실행 수를 제한한다. 제한 기본값은
+`.env.docker.example`의 `AI_*` 변수로 조정한다.
+
+`AI_DAILY_BUDGET_USD`는 엔드포인트별 `AI_*_REQUEST_RESERVATION_USD`를 선차감하는 보수적
+애플리케이션 한도이며 OpenAI 청구액과의 실시간 정산값은 아니다. OpenAI 프로젝트의 사용량
+알림·모델별 rate limit도 함께 설정한다. 프로젝트 예산이 차단형인지 알림형인지는 배포 계정의
+현재 설정을 확인한다.
+
+`.env.docker`는 백엔드 컨테이너에만 주입한다. 프런트엔드 설정은
+`frontend/.env`에 `VITE_*` 변수만 두며, API 키나 데이터베이스 접속정보를 넣지 않는다.
 
 `frontend` 서비스는 컨테이너 시작 시 `npm ci`를 실행하고, `node_modules`는 Docker named
 volume에 저장한다. 프런트 의존성이 꼬이면 아래처럼 볼륨까지 지운 뒤 다시 띄운다.
@@ -69,10 +87,11 @@ SPA fallback을 지원하는 정적 호스팅/CDN을 사용한다. 컨테이너 
 - 컨테이너 포트: `8000`
 - readiness: `/api/v1/health/ready`
 - liveness: `/api/v1/health/live`
-- 필수 변수: `APP_ENV=production`, `CORS_ORIGINS=https://<frontend-domain>`, `OPENAI_API_KEY`
+- 필수 변수: `APP_ENV=production`, `CORS_ORIGINS=https://<frontend-domain>`, `OPENAI_API_KEY`, `AI_ACCESS_CODE`, `AI_SESSION_SECRET`
 - 에이전트 변수: `OPENAI_MODEL=gpt-5.4-mini`, `AGENT_TIMEOUT_SECONDS=30`, `AGENT_MAX_TURNS=4`, `AGENT_RATE_LIMIT_PER_MINUTE=10`
 - 외부 점포 API 보호: `STORE_RATE_LIMIT_PER_MINUTE=5`(클라이언트별 1분 GET 한도)
 
 배포 시 `backend/artifacts/current`가 이미지에 포함되므로 모델과 데이터 버전은 이미지
 태그와 함께 불변으로 관리한다. API 키나 비밀값은 이미지와 Git에 포함하지 않는다.
-`OPENAI_API_KEY`는 배포 플랫폼의 비밀 저장소에서 런타임 환경변수로만 주입한다.
+`OPENAI_API_KEY`, `AI_ACCESS_CODE`, `AI_SESSION_SECRET`은 배포 플랫폼의 비밀 저장소에서
+런타임 환경변수로만 주입한다.

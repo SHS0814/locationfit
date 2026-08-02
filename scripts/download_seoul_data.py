@@ -35,6 +35,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="마스킹된 첫 5행 응답 진단만 수행(파일 저장 안 함)",
     )
+    parser.add_argument(
+        "--allow-insecure-seoul-http",
+        action="store_true",
+        help="신뢰된 수집 환경에서 서울시 공식 평문 HTTP API 사용을 명시적으로 허용",
+    )
     return parser.parse_args()
 
 
@@ -145,7 +150,12 @@ def select_quarter_rows(frame: pd.DataFrame, quarter: int) -> list[dict[str, Any
     return frame.loc[numeric_quarter.eq(quarter)].to_dict("records")
 
 
-def create_client(config: dict[str, Any], *, debug: bool = False) -> SeoulAPIClient:
+def create_client(
+    config: dict[str, Any],
+    *,
+    debug: bool = False,
+    allow_insecure_http: bool = False,
+) -> SeoulAPIClient:
     """Create an API client from config without logging credentials."""
     api = config.get("api", {})
     return SeoulAPIClient(
@@ -154,6 +164,7 @@ def create_client(config: dict[str, Any], *, debug: bool = False) -> SeoulAPICli
         timeout=float(api.get("timeout_seconds", 30)),
         max_retries=int(api.get("max_retries", 3)),
         retry_wait=float(api.get("retry_wait_seconds", 1)),
+        allow_insecure_http=allow_insecure_http,
         debug=debug,
     )
 
@@ -203,7 +214,11 @@ def main() -> int:
             continue
         try:
             if client is None:
-                client = create_client(config, debug=args.debug_api)
+                client = create_client(
+                    config,
+                    debug=args.debug_api,
+                    allow_insecure_http=args.allow_insecure_seoul_http,
+                )
             mode = spec.get("quarter_filter", {}).get("mode", "local")
             if args.debug_api:
                 if not spec.get("quarterly", True):

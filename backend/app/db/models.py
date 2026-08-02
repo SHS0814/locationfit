@@ -105,6 +105,24 @@ class TimestampMixin:
     )
 
 
+class AIRequestEvent(Base):
+    __tablename__ = "ai_request_events"
+    __table_args__ = (
+        CheckConstraint("reserved_cost_microusd >= 0", name="reserved_cost_nonnegative"),
+        CheckConstraint("lease_expires_at > started_at", name="lease_after_start"),
+        Index("ix_ai_request_events_started_at", "started_at"),
+        Index("ix_ai_request_events_active_lease", "finished_at", "lease_expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    session_id_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(32), nullable=False)
+    reserved_cost_microusd: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Organization(TimestampMixin, Base):
     __tablename__ = "organizations"
 

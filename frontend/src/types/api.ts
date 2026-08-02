@@ -499,6 +499,12 @@ export interface RecommendationReportArea {
   performance_breakdown: Record<PerformanceGroupKey, PerformanceGroupContribution>
 }
 
+export interface AISessionStatus {
+  required: boolean
+  authenticated: boolean
+  expires_at: string | null
+}
+
 export interface RecommendationReport {
   candidate_count: number
   benchmark_label: string

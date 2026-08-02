@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 
 from backend.app.api.dependencies import get_location_agent, get_workspace_agent
+from backend.app.core.ai_security import require_ai_request
 from backend.app.schemas.agent import AgentTurnRequest, AgentTurnResponse, WorkspaceAgentRequest, WorkspaceAgentResponse
 from backend.app.services.agent_service import LocationAgentService
 from backend.app.services.workspace_agent_service import WorkspaceAgentService
@@ -12,6 +13,7 @@ router = APIRouter(tags=["agent"])
 async def agent_turn(
     payload: AgentTurnRequest,
     request: Request,
+    _permit: object = Depends(require_ai_request),
     service: LocationAgentService = Depends(get_location_agent),
 ) -> AgentTurnResponse:
     result = await service.turn(payload)
@@ -44,6 +46,7 @@ async def agent_turn(
 async def workspace_agent_turn(
     payload: WorkspaceAgentRequest,
     request: Request,
+    _permit: object = Depends(require_ai_request),
     service: WorkspaceAgentService = Depends(get_workspace_agent),
 ) -> WorkspaceAgentResponse:
     result = await service.turn(payload)

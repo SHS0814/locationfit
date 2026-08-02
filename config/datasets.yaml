@@ -14,6 +14,8 @@ time_decay:
   base: 0.94
 
 api:
+  # 서울시 공식 가이드가 현재 안내하는 HTTP 엔드포인트다. 수집기는 다른
+  # 호스트와 redirect를 차단하고 --allow-insecure-seoul-http를 요구한다.
   base_url: http://openapi.seoul.go.kr:8088
   page_size: 1000
   timeout_seconds: 30

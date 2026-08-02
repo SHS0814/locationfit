@@ -1,6 +1,7 @@
 from backend.app.db.base import Base
 from backend.app.db.models import (
     AcquisitionMode,
+    AIRequestEvent,
     BenefitType,
     DataSource,
     EligibilityRule,
@@ -20,6 +21,7 @@ from backend.app.db.session import get_db_session, get_engine, session_scope
 
 __all__ = [
     "AcquisitionMode",
+    "AIRequestEvent",
     "Base",
     "BenefitType",
     "DataSource",

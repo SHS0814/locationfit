@@ -42,8 +42,13 @@ services:
   frontend:
     image: node:22-alpine
     working_dir: /app/frontend
-    env_file:
-      - ${APP_ENV_FILE:-.env.docker}
+    # Never pass the backend secret environment file to Node/npm. Vite loads
+    # frontend/.env itself, while these entries allow only explicitly supplied
+    # VITE_* host variables through to the frontend container.
+    environment:
+      - VITE_API_BASE_URL
+      - VITE_MAP_TILE_URL
+      - VITE_MAP_ATTRIBUTION
     command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
     depends_on:
       - backend

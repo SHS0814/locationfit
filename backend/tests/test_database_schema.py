@@ -34,6 +34,7 @@ from backend.app.financial_catalog.persistence import bundle_from_database
 from backend.app.financial_catalog.workflow import apply_preview, preview_catalog
 
 EXPECTED_TABLES = {
+    "ai_request_events",
     "organizations",
     "data_sources",
     "funding_products",
@@ -69,6 +70,7 @@ def test_financial_catalog_metadata_is_complete() -> None:
     assert "ck_funding_products_application_date_order" in constraint_names
     assert "ck_product_benefits_amount_order" in constraint_names
     assert "uq_product_sources_product_source_external_id" in constraint_names
+    assert "ck_ai_request_events_reserved_cost_nonnegative" in constraint_names
 
 
 def test_catalog_model_represents_roles_benefits_rules_and_sources() -> None:

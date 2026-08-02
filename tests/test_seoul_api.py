@@ -39,9 +39,11 @@ class FakeSession:
     def __init__(self, responses: list[FakeResponse | Exception]) -> None:
         self.responses = iter(responses)
         self.calls = 0
+        self.request_kwargs: list[dict[str, object]] = []
 
     def get(self, url: str, **kwargs: object) -> FakeResponse:
         self.calls += 1
+        self.request_kwargs.append(kwargs)
         item = next(self.responses)
         if isinstance(item, Exception):
             raise item
@@ -67,6 +69,7 @@ def success_body(service: str, total: int, rows: list[dict]) -> str:
 class SeoulAPIClientTests(unittest.TestCase):
     def make_client(self, responses: list[FakeResponse | Exception], **kwargs: object) -> tuple[SeoulAPIClient, FakeSession]:
         session = FakeSession(responses)
+        kwargs.setdefault("allow_insecure_http", True)
         client = SeoulAPIClient(
             api_key="unit-test-secret",
             session=session,
@@ -84,6 +87,33 @@ class SeoulAPIClientTests(unittest.TestCase):
         result = client.fetch_page(service)
         self.assertEqual(result.total_count, 1)
         self.assertEqual(result.rows[0]["STDR_YYQU_CD"], "20211")
+
+    def test_plain_http_requires_explicit_opt_in(self) -> None:
+        with self.assertRaisesRegex(SeoulAPIError, "--allow-insecure-seoul-http"):
+            SeoulAPIClient(api_key="unit-test-secret", logger=None)
+
+    def test_non_official_host_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "공식 호스트"):
+            SeoulAPIClient(
+                api_key="unit-test-secret",
+                base_url="https://example.test",
+                logger=None,
+            )
+
+    def test_official_https_does_not_require_insecure_opt_in(self) -> None:
+        client = SeoulAPIClient(
+            api_key="unit-test-secret",
+            base_url="https://openapi.seoul.go.kr",
+            session=FakeSession([]),
+            logger=None,
+        )
+        self.assertTrue(client.build_url("DemoService", 1, 5).startswith("https://"))
+
+    def test_redirect_is_not_followed(self) -> None:
+        client, session = self.make_client([FakeResponse("", status=302)])
+        with self.assertRaisesRegex(SeoulAPIError, "리다이렉트"):
+            client.fetch_page("DemoService")
+        self.assertEqual(session.request_kwargs[0]["allow_redirects"], False)
 
     def test_paginates_until_total_count(self) -> None:
         service = "DemoService"
@@ -194,12 +224,20 @@ class SeoulAPIClientTests(unittest.TestCase):
             env_path = Path(directory) / ".env"
             env_path.write_text("SEOUL_API_KEY=  env-secret  \n", encoding="utf-8")
             with patch.dict(os.environ, {}, clear=True):
-                client = SeoulAPIClient(env_path=env_path, logger=None)
+                client = SeoulAPIClient(
+                    env_path=env_path,
+                    allow_insecure_http=True,
+                    logger=None,
+                )
             self.assertEqual(client.api_key, "env-secret")
 
     def test_placeholder_key_is_rejected_before_request(self) -> None:
         with self.assertRaisesRegex(SeoulAPIError, "placeholder"):
-            SeoulAPIClient(api_key="your_seoul_open_data_api_key", logger=None)
+            SeoulAPIClient(
+                api_key="your_seoul_open_data_api_key",
+                allow_insecure_http=True,
+                logger=None,
+            )
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import requests
 from dotenv import load_dotenv
@@ -50,6 +50,8 @@ class ResponseDiagnostics:
 class SeoulAPIClient:
     """Fetch Seoul Open Data services without exposing authentication keys."""
 
+    OFFICIAL_HOST = "openapi.seoul.go.kr"
+    OFFICIAL_HTTP_PORT = 8088
     SUCCESS_CODES = {"INFO-000"}
     EMPTY_CODES = {"INFO-200"}
     RETRYABLE_HTTP_CODES = {429, 500, 502, 503, 504}
@@ -72,9 +74,12 @@ class SeoulAPIClient:
         retry_wait: float = 1.0,
         session: requests.Session | None = None,
         env_path: Path | None = None,
+        allow_insecure_http: bool = False,
         debug: bool = False,
         logger: Callable[[str], None] | None = print,
     ) -> None:
+        self.debug = debug
+        self.logger = logger
         self.env_path = (env_path or PROJECT_ROOT / ".env").resolve()
         load_dotenv(self.env_path, override=False)
         raw_api_key = api_key if api_key is not None else os.getenv("SEOUL_API_KEY")
@@ -89,17 +94,51 @@ class SeoulAPIClient:
             )
         if page_size < 1 or page_size > 1000:
             raise ValueError("page_size는 1~1000이어야 합니다.")
-        self.base_url = base_url.rstrip("/")
+        self.base_url = self._validate_base_url(base_url, allow_insecure_http)
         self.page_size = page_size
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_wait = retry_wait
         self.session = session or requests.Session()
-        self.debug = debug
-        self.logger = logger
+        if urlsplit(self.base_url).scheme == "http":
+            self._emit(
+                "[SECURITY WARNING] 서울시 API 키가 평문 HTTP URL로 전송됩니다. "
+                "신뢰할 수 있는 제한된 수집 환경에서 전용 키로만 실행하세요."
+            )
         if self.debug:
             self._emit("SEOUL_API_KEY loaded: yes")
             self._emit(f"length: {len(self.api_key)}")
+
+    @classmethod
+    def _validate_base_url(cls, base_url: str, allow_insecure_http: bool) -> str:
+        """Allow only the official API origin and require explicit HTTP consent."""
+        normalized = base_url.strip().rstrip("/")
+        try:
+            parsed = urlsplit(normalized)
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("서울시 API base_url이 올바르지 않습니다.") from exc
+
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("서울시 API base_url은 http 또는 https여야 합니다.")
+        if parsed.hostname is None or parsed.hostname.lower() != cls.OFFICIAL_HOST:
+            raise ValueError(f"서울시 API는 공식 호스트 {cls.OFFICIAL_HOST}만 허용합니다.")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("서울시 API base_url에는 인증정보, query, fragment를 넣을 수 없습니다.")
+        if parsed.path not in {"", "/"}:
+            raise ValueError("서울시 API base_url에는 경로를 넣을 수 없습니다.")
+        if parsed.scheme == "http":
+            if port != cls.OFFICIAL_HTTP_PORT:
+                raise ValueError(
+                    f"서울시 HTTP API는 공식 포트 {cls.OFFICIAL_HTTP_PORT}만 허용합니다."
+                )
+            if not allow_insecure_http:
+                raise SeoulAPIError(
+                    "서울시 공식 API는 인증키를 URL에 넣는 평문 HTTP 엔드포인트를 사용합니다. "
+                    "신뢰할 수 있는 제한된 수집 환경에서만 "
+                    "--allow-insecure-seoul-http를 명시하세요."
+                )
+        return normalized
 
     def build_url(
         self,
@@ -208,7 +247,7 @@ class SeoulAPIClient:
         last_error: SeoulAPIError | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
-                response = self.session.get(url, timeout=self.timeout, allow_redirects=True)
+                response = self.session.get(url, timeout=self.timeout, allow_redirects=False)
                 return self._decode_response(response, url, label)
             except (requests.Timeout, requests.ConnectionError) as exc:
                 detail = self._sanitize(str(exc))
@@ -241,6 +280,11 @@ class SeoulAPIClient:
         if self.debug:
             self._emit_diagnostics(label, diagnostics)
 
+        if 300 <= diagnostics.status < 400:
+            raise SeoulAPIError(
+                f"[{label}] API 키가 다른 위치로 전달되지 않도록 HTTP 리다이렉트를 거부했습니다.\n"
+                f"{self._format_diagnostics(diagnostics)}"
+            )
         if diagnostics.status in self.RETRYABLE_HTTP_CODES:
             raise SeoulAPIError(
                 f"[{label}] 일시적 HTTP 오류입니다.\n{self._format_diagnostics(diagnostics)}",
@@ -358,7 +402,8 @@ class SeoulAPIClient:
             content_type=str(getattr(response, "headers", {}).get("Content-Type", "")),
             body_length=len(body),
             body_preview=self._sanitize(text[:500]),
-            redirected=bool(getattr(response, "history", [])),
+            redirected=bool(getattr(response, "history", []))
+            or 300 <= int(getattr(response, "status_code", 0)) < 400,
             url=self.mask_url(str(final_url)),
         )
 

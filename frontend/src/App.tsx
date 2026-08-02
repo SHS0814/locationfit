@@ -3,6 +3,7 @@ import { api } from './api/client'
 import { RecommendationMap } from './components/map/RecommendationMap'
 import { AgentPanel } from './features/agent/AgentPanel'
 import { AgentAnalysisPanels } from './features/agent/AgentAnalysisPanels'
+import { AiAccessGate } from './features/agent/AiAccessGate'
 import { AgentCommandCenter } from './features/agent/AgentCommandCenter'
 import { LatestRequestGuard } from './features/agent/asyncRequest'
 import { MarketLookupCard } from './features/agent/MarketLookupCard'
@@ -53,6 +54,37 @@ const recommendationPageLabels: Record<RecommendationPage, string> = {
 }
 
 export default function App() {
+  const [accessState, setAccessState] = useState<'checking' | 'granted' | 'required' | 'error'>('checking')
+  const [accessError, setAccessError] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.aiSessionStatus()
+      .then((status) => setAccessState(status.authenticated ? 'granted' : 'required'))
+      .catch((reason: Error) => {
+        setAccessError(reason.message)
+        setAccessState('error')
+      })
+  }, [])
+
+  useEffect(() => {
+    const expireSession = () => setAccessState('required')
+    window.addEventListener('locationfit:ai-session-expired', expireSession)
+    return () => window.removeEventListener('locationfit:ai-session-expired', expireSession)
+  }, [])
+
+  if (accessState === 'checking') {
+    return <main className="ai-access-shell"><p>보안 세션을 확인하고 있습니다…</p></main>
+  }
+  if (accessState === 'error') {
+    return <main className="ai-access-shell"><section className="ai-access-card"><h1>AI 보안 설정 오류</h1><p role="alert">{accessError}</p></section></main>
+  }
+  if (accessState === 'required') {
+    return <AiAccessGate onAuthenticated={() => setAccessState('granted')} />
+  }
+  return <ProtectedApp />
+}
+
+function ProtectedApp() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null)
   const [session, setSession] = useState<AgentSession>(() => restoreSession(
     sessionStorage.getItem(AGENT_SESSION_KEY)

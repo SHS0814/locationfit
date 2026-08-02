@@ -31,7 +31,13 @@ npm run dev
 
 기본 주소는 웹 `http://localhost:5173`, API 문서 `http://localhost:8000/docs`다.
 
-AI 상담과 선택 상권·업소 웹 리서치를 사용하려면 저장소 루트의 `.env.example`을 참고해 서버 실행 환경에 `OPENAI_API_KEY`를 설정한다. 기본 모델은 `gpt-5.4-mini`이며 `OPENAI_MODEL`로 변경할 수 있다. API 키가 없거나 OpenAI API가 일시적으로 실패하면 기존 추천 데이터와 API는 정상 동작하지만 AI 상담·웹 리서치는 재시도 오류를 반환한다.
+AI 상담과 선택 상권·업소 웹 리서치를 사용하려면 저장소 루트의 `.env.example`을 참고해 서버 실행 환경에 `OPENAI_API_KEY`, `AI_ACCESS_CODE`, `AI_SESSION_SECRET`을 설정한다. 기본 모델은 `gpt-5.4-mini`이며 `OPENAI_MODEL`로 변경할 수 있다. API 키가 없거나 OpenAI API가 일시적으로 실패하면 기존 추천 데이터와 API는 정상 동작하지만 AI 상담·웹 리서치는 재시도 오류를 반환한다.
+
+AI 기능은 접근 코드로 발급한 서명형 HttpOnly 세션이 있어야 호출할 수 있다. PostgreSQL의
+공용 요청 원장은 다중 워커에서도 분당 요청, UTC 일일 요청·비용 예약액, 동시 실행 수를
+일관되게 제한한다. 운영 환경에서는 이 보호 기능을 끌 수 없으며 HTTPS와 명시적인
+`CORS_ORIGINS`를 사용해야 한다. 비용 예약액은 앱 내부 차단용 추정치이므로 OpenAI 프로젝트의
+사용량·예산 알림도 함께 확인한다.
 
 대화와 추천 상태는 브라우저 탭의 `sessionStorage`에만 저장된다. 서버는 대화 원문을 저장하지 않고 Agents SDK 추적과 OpenAI 응답 저장을 비활성화한다.
 
@@ -88,7 +94,9 @@ STORE_RATE_LIMIT_PER_MINUTE=5
 ```bash
 cp .env.docker.example .env.docker
 cp .env.postgres.example .env.postgres
-# 최초 실행 전에 두 파일의 PostgreSQL 비밀번호를 같은 임의 값으로 변경
+cp frontend/.env.example frontend/.env
+# 최초 실행 전에 .env.postgres의 비밀번호와 .env.docker DATABASE_URL의 비밀번호를
+# 같은 충분히 긴 임의 값으로 변경
 docker compose up -d db
 docker compose run --rm backend alembic -c backend/alembic.ini upgrade head
 docker compose run --rm backend alembic -c backend/alembic.ini current
@@ -101,7 +109,7 @@ docker compose run --rm backend alembic -c backend/alembic.ini current
 ```
 
 - 추천 모델과 서울 상권 데이터는 기존 Parquet 아티팩트를 계속 사용한다.
-- PostgreSQL은 금융지원 기관·상품·혜택·자격조건·공식 출처 카탈로그만 담당한다.
+- PostgreSQL은 금융지원 카탈로그와 AI 요청 제한용 최소 원장만 담당한다. 대화 원문은 저장하지 않는다.
 - 자격조건 그룹 간에는 OR, 한 그룹 안의 조건 간에는 AND 의미를 갖는다.
 - 상품 조건 변경 시 과거 리비전을 만들지 않고 현재 행과 확인시각을 갱신한다.
 
@@ -199,7 +207,7 @@ cp .env.example .env
 # .env에 SEOUL_API_KEY 입력
 ```
 
-`.env`와 API 키는 Git에 포함하지 않으며, API 키는 로그·CSV·메타데이터에 저장하지 않는다.
+`.env`와 API 키는 Git에 포함하지 않으며, API 키는 로그·CSV·메타데이터에 저장하지 않는다. [서울시 공식 Open API 가이드](https://data.seoul.go.kr/together/guide/useGuide.do)는 현재 인증키를 URL 경로에 넣는 `http://openapi.seoul.go.kr:8088` 호출을 안내한다. 이 키는 다른 서비스에서 재사용하지 않는 수집 전용 키로 발급하고, 공용 Wi-Fi가 아닌 신뢰할 수 있는 제한된 수집 환경에서만 사용한다.
 
 ## 원본 데이터 수집
 
@@ -207,18 +215,21 @@ cp .env.example .env
 
 ```bash
 .venv/bin/python scripts/download_seoul_data.py \
-  --dataset stores --quarters 20211 --debug-api
+  --dataset stores --quarters 20211 --debug-api \
+  --allow-insecure-seoul-http
 
 .venv/bin/python scripts/download_seoul_data.py \
-  --all --skip-sales
+  --all --skip-sales \
+  --allow-insecure-seoul-http
 ```
 
-`--debug-api`는 첫 5행 응답만 진단하고 파일을 저장하지 않는다. 전체 수집이 중간에 실패하면 같은 `--all --skip-sales` 명령을 다시 실행하면 이미 저장된 파일을 건너뛰고 이어받는다.
+`--allow-insecure-seoul-http`는 제공자 제약으로 남은 평문 HTTP 위험을 인지하고 이번 수집 실행에만 허용하는 플래그다. 플래그가 없으면 네트워크 요청 전에 중단한다. 클라이언트는 공식 호스트·포트만 허용하고 리다이렉트를 따르지 않는다. `--debug-api`는 첫 5행 응답만 진단하고 파일을 저장하지 않는다. 전체 수집이 중간에 실패하면 같은 `--all --skip-sales` 명령을 다시 실행하면 이미 저장된 파일을 건너뛰고 이어받는다.
 
 추정매출 API 재수집은 아래처럼 데이터셋과 덮어쓰기 의도를 둘 다 명시해야 한다. 기존 연도별 파일은 수정하지 않고 `sales_YYYYQ.csv`를 별도 생성한다.
 
 ```bash
-.venv/bin/python scripts/download_seoul_data.py --dataset sales --overwrite
+.venv/bin/python scripts/download_seoul_data.py \
+  --dataset sales --overwrite --allow-insecure-seoul-http
 ```
 
 분기 파일은 `data/raw/<dataset>/<prefix>_20211.csv`, 비분기 영역 데이터는 `data/raw/area/area.csv`로 저장된다. 각 CSV 옆에 인증 정보가 없는 `.meta.json`이 생성된다.
